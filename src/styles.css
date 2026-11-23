@@ -97,6 +97,8 @@ form { display: flex; flex-direction: column; gap: 14px; }
 .segmented button.on { background: var(--black); color: #fff; box-shadow: var(--shadow); }
 .alert { padding: 11px 15px; border-radius: 12px; font-size: .88rem; margin-bottom: 4px; }
 .alert.err { background: var(--brick-soft); color: var(--brick); } .alert.ok { background: var(--green-soft); color: var(--green); }
+.cost-form { border-left: 5px solid var(--brick); }
+.cost-title { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 2px; }
 .member-actions { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .btn.sm-btn { padding: 5px 14px; font-size: .82rem; }
 .min-input { width: 96px; text-align: right; padding: 6px 8px; } .qty-input { max-width: 130px; }

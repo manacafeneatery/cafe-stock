@@ -2,10 +2,14 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { supabase } from '../lib/supabase'
 import { loadIngredients } from '../lib/data'
 import type { Category, Ingredient } from '../lib/types'
-import { LEVEL_LABEL, num, rupiah, stockLevel } from '../lib/analytics'
+import { dateTime, LEVEL_LABEL, num, rupiah, stockLevel } from '../lib/analytics'
 
 const empty = { name: '', unit: 'gram', category_id: '', min_stock: '0' }
 type Msg = { ok: boolean; text: string } | null
+interface Adjustment {
+  id: string; ingredient_id: string; old_avg: number; new_avg: number
+  old_last: number; new_last: number; note: string | null; created_at: string
+}
 
 export default function Ingredients() {
   const [ings, setIngs] = useState<Ingredient[]>([])
@@ -17,12 +21,17 @@ export default function Ingredients() {
   const [newCat, setNewCat] = useState('')
   const [showCats, setShowCats] = useState(false)
   const [msg, setMsg] = useState<Msg>(null)
+  const [costFor, setCostFor] = useState<Ingredient | null>(null)
+  const [costForm, setCostForm] = useState({ avg: '', last: '', note: '' })
+  const [adjs, setAdjs] = useState<Adjustment[]>([])
 
   const load = useCallback(async () => {
-    const [a, b] = await Promise.all([
+    const [a, b, d] = await Promise.all([
       loadIngredients(true),
       supabase.from('categories').select('*').order('name'),
+      supabase.from('cost_adjustments').select('*').order('created_at', { ascending: false }).limit(10),
     ])
+    if (d.data) setAdjs(d.data as Adjustment[])
     if (a.error) setMsg({ ok: false, text: a.error.message })
     setIngs(a.data)
     if (b.error) setMsg({ ok: false, text: `Kategori: ${b.error.message} (sudah menjalankan 002_categories.sql?)` })
@@ -57,6 +66,25 @@ export default function Ingredients() {
     if (error) return setMsg({ ok: false, text: error.message.includes('duplicate') ? 'Nama bahan sudah ada.' : error.message })
     setMsg({ ok: true, text: editing ? 'Bahan diperbarui.' : 'Bahan ditambahkan.' })
     reset(); load()
+  }
+
+  // ---- Atur harga manual (tercatat di riwayat) ----
+  const openCost = (i: Ingredient) => {
+    setCostFor(i)
+    setCostForm({ avg: String(i.avg_cost), last: String(i.last_cost || i.avg_cost), note: '' })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+  const saveCost = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!costFor) return
+    const avg = Number(costForm.avg), last = Number(costForm.last)
+    if (!(avg >= 0) || !(last >= 0)) return setMsg({ ok: false, text: 'Harga tidak valid.' })
+    const { error } = await supabase.rpc('set_ingredient_cost', {
+      p_ingredient: costFor.id, p_avg_cost: avg, p_last_cost: last, p_note: costForm.note.trim() || null,
+    })
+    if (error) return setMsg({ ok: false, text: `${error.message} (sudah menjalankan 005_cost_adjust.sql?)` })
+    setMsg({ ok: true, text: `Harga ${costFor.name} diperbarui: HPP ${rupiah(avg)} / ${costFor.unit}.` })
+    setCostFor(null); load()
   }
 
   const toggle = async (i: Ingredient) => {
@@ -123,6 +151,28 @@ export default function Ingredients() {
       </form>
       {msg && <div className={msg.ok ? 'alert ok' : 'alert err'}>{msg.text}</div>}
 
+      {costFor && (
+        <form className="card form-row cost-form" onSubmit={saveCost}>
+          <div className="cost-title">
+            <strong>Atur harga: {costFor.name}</strong>
+            <span className="muted small">Hanya untuk koreksi atau stok awal. Pembelian berikutnya lewat Entry Stok tetap menghitung HPP rata-rata dari angka ini.</span>
+          </div>
+          <label>HPP per {costFor.unit} (Rp)
+            <input type="number" min="0" step="any" value={costForm.avg} onChange={(e) => setCostForm({ ...costForm, avg: e.target.value })} required />
+          </label>
+          <label>Harga beli terakhir per {costFor.unit} (Rp)
+            <input type="number" min="0" step="any" value={costForm.last} onChange={(e) => setCostForm({ ...costForm, last: e.target.value })} required />
+          </label>
+          <label>Alasan / catatan
+            <input value={costForm.note} onChange={(e) => setCostForm({ ...costForm, note: e.target.value })} placeholder="mis. stok awal sebelum pakai aplikasi" />
+          </label>
+          <div className="actions">
+            <button className="btn">Simpan harga</button>
+            <button type="button" className="btn-ghost" onClick={() => setCostFor(null)}>Batal</button>
+          </div>
+        </form>
+      )}
+
       <section className="card">
         <header className="card-head">
           <h3>Kategori bahan</h3>
@@ -177,6 +227,7 @@ export default function Ingredients() {
                     <td className="r"><strong>{rupiah(i.current_stock * i.avg_cost)}</strong></td>
                     <td className="r nowrap">
                       <button className="btn-ghost sm" onClick={() => startEdit(i)}>Ubah</button>
+                      <button className="btn-ghost sm" onClick={() => openCost(i)}>Atur harga</button>
                       <button className="btn-ghost sm" onClick={() => toggle(i)}>{i.is_active ? 'Nonaktifkan' : 'Aktifkan'}</button>
                     </td>
                   </tr>
@@ -187,6 +238,29 @@ export default function Ingredients() {
           </table>
         </div>
       </section>
+
+      {adjs.length > 0 && (
+        <section className="card">
+          <header className="card-head"><h3>Riwayat penyesuaian harga</h3><span className="badge">{adjs.length} terakhir</span></header>
+          <ul className="list">
+            {adjs.map((a) => {
+              const ing = ings.find((i) => i.id === a.ingredient_id)
+              return (
+                <li key={a.id}>
+                  <div className="row-main">
+                    <strong>{ing?.name ?? '—'}</strong>
+                    <span className="muted small">{dateTime(a.created_at)}{a.note ? ` · ${a.note}` : ''}</span>
+                  </div>
+                  <div className="row-side">
+                    <span className="small">HPP {rupiah(a.old_avg)} → <strong>{rupiah(a.new_avg)}</strong></span>
+                    <span className="muted small">Terakhir {rupiah(a.old_last)} → {rupiah(a.new_last)}</span>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      )}
     </>
   )
 }
