@@ -50,6 +50,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ? `Gagal membaca profil: ${profErr.message}`
         : `Profil tidak ditemukan untuk user ${data.user.id}. Hubungi admin.`
     }
+    if (p.role === 'pending') {
+      await supabase.auth.signOut()
+      return 'Akun Anda belum disetujui. Minta Admin menyetujui akun Anda di menu Karyawan, lalu masuk lagi.'
+    }
     if (p.role !== expected) {
       await supabase.auth.signOut()
       return expected === 'admin'
@@ -63,9 +67,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp: AuthState['signUp'] = async (name, email, password) => {
     const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name } } })
     if (error) return error.message
-    if (!data.session) return 'Pendaftaran berhasil. Cek email untuk konfirmasi, lalu masuk.'
+    if (!data.session) return 'Pendaftaran berhasil. Cek email untuk konfirmasi, lalu tunggu persetujuan Admin.'
     await supabase.auth.signOut()
-    return 'Pendaftaran berhasil. Silakan masuk.'
+    return 'Pendaftaran berhasil. Akun Anda akan aktif setelah disetujui Admin.'
   }
 
   const signOut = async () => {

@@ -7,9 +7,10 @@ import StockEntry from './pages/StockEntry'
 import Opname from './pages/Opname'
 import Menus from './pages/Menus'
 import Ingredients from './pages/Ingredients'
+import Members from './pages/Members'
 import Bell from './components/Bell'
 
-type Tab = 'dashboard' | 'entry' | 'opname' | 'menus' | 'ingredients'
+type Tab = 'dashboard' | 'entry' | 'opname' | 'menus' | 'ingredients' | 'members'
 
 export default function App() {
   const { session, profile, loading, signOut } = useAuth()
@@ -32,6 +33,19 @@ export default function App() {
   if (loading) return <div className="center-screen"><div className="spinner" /></div>
   if (!session || !profile) return <Login />
 
+  if (profile.role === 'pending') {
+    return (
+      <div className="center-screen">
+        <div className="card narrow center">
+          <div className="logo big">⏳</div>
+          <h2>Menunggu persetujuan Admin</h2>
+          <p className="muted">Akun <strong>{profile.full_name}</strong> sudah terdaftar, tetapi belum diaktifkan. Hubungi Admin kafe, lalu masuk kembali.</p>
+          <button className="btn" onClick={signOut}>Keluar</button>
+        </div>
+      </div>
+    )
+  }
+
   const isAdmin = profile.role === 'admin'
   const tabs: { id: Tab; label: string; icon: string }[] = [
     { id: 'dashboard', label: 'Ringkasan', icon: '📊' },
@@ -40,6 +54,7 @@ export default function App() {
     ...(isAdmin ? [
       { id: 'menus' as Tab, label: 'Menu', icon: '🍹' },
       { id: 'ingredients' as Tab, label: 'Bahan', icon: '🧾' },
+      { id: 'members' as Tab, label: 'Karyawan', icon: '👥' },
     ] : []),
   ]
 
@@ -65,10 +80,11 @@ export default function App() {
       <main className="content">
         <div className="topbar"><Bell /></div>
         {tab === 'dashboard' && <Dashboard isAdmin={isAdmin} />}
-        {tab === 'entry' && <StockEntry />}
+        {tab === 'entry' && <StockEntry isAdmin={isAdmin} />}
         {tab === 'opname' && <Opname isAdmin={isAdmin} />}
         {tab === 'menus' && isAdmin && <Menus />}
         {tab === 'ingredients' && isAdmin && <Ingredients />}
+        {tab === 'members' && isAdmin && <Members />}
       </main>
     </div>
   )

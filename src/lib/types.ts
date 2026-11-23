@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'staff'
+export type Role = 'admin' | 'staff' | 'pending'
 export type MovementType = 'in' | 'out' | 'waste' | 'adjust_in' | 'adjust_out'
 export const isIncoming = (t: MovementType) => t === 'in' || t === 'adjust_in'
 
@@ -19,6 +19,7 @@ export interface RecipeItem {
 export interface Profile {
   id: string
   full_name: string | null
+  email?: string | null
   role: Role
 }
 

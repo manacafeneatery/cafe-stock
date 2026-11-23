@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
+import { loadIngredients, MOVE_COLS } from '../lib/data'
 import { isIncoming, type Category, type Ingredient, type Movement, type MovementType } from '../lib/types'
 import { dateTime, num, rupiah } from '../lib/analytics'
 
@@ -9,7 +10,7 @@ const TYPES: { id: 'in' | 'out' | 'waste'; label: string; icon: string }[] = [
   { id: 'waste', label: 'Rusak/Waste', icon: '🗑️' },
 ]
 
-export default function StockEntry() {
+export default function StockEntry({ isAdmin }: { isAdmin: boolean }) {
   const [ings, setIngs] = useState<Ingredient[]>([])
   const [cats, setCats] = useState<Category[]>([])
   const [recent, setRecent] = useState<Movement[]>([])
@@ -23,14 +24,14 @@ export default function StockEntry() {
 
   const load = useCallback(async () => {
     const [a, b, c] = await Promise.all([
-      supabase.from('ingredients').select('*').eq('is_active', true).order('name'),
-      supabase.from('stock_movements').select('*').order('created_at', { ascending: false }).limit(15),
+      loadIngredients(isAdmin, true),
+      supabase.from('stock_movements').select(MOVE_COLS).order('created_at', { ascending: false }).limit(15),
       supabase.from('categories').select('*').order('name'),
     ])
-    if (a.data) setIngs(a.data as Ingredient[])
-    if (b.data) setRecent(b.data as Movement[])
+    setIngs(a.data)
+    if (b.data) setRecent(b.data as unknown as Movement[])
     if (c.data) setCats(c.data as Category[])
-  }, [])
+  }, [isAdmin])
 
   useEffect(() => { load() }, [load])
 

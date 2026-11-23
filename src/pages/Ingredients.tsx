@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
+import { loadIngredients } from '../lib/data'
 import type { Category, Ingredient } from '../lib/types'
 import { LEVEL_LABEL, num, rupiah, stockLevel } from '../lib/analytics'
 
@@ -19,11 +20,11 @@ export default function Ingredients() {
 
   const load = useCallback(async () => {
     const [a, b] = await Promise.all([
-      supabase.from('ingredients').select('*').order('name'),
+      loadIngredients(true),
       supabase.from('categories').select('*').order('name'),
     ])
     if (a.error) setMsg({ ok: false, text: a.error.message })
-    if (a.data) setIngs(a.data as Ingredient[])
+    setIngs(a.data)
     if (b.error) setMsg({ ok: false, text: `Kategori: ${b.error.message} (sudah menjalankan 002_categories.sql?)` })
     if (b.data) setCats(b.data as Category[])
   }, [])

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { ING_COLS } from '../lib/data'
 import type { Ingredient } from '../lib/types'
 import { num } from '../lib/analytics'
 
@@ -15,9 +16,9 @@ export default function Bell() {
   useEffect(() => {
     let stop = false
     const check = async () => {
-      const { data } = await supabase.from('ingredients').select('*').eq('is_active', true)
+      const { data } = await supabase.from('ingredients').select(ING_COLS).eq('is_active', true)
       if (stop || !data) return
-      const items = (data as Ingredient[])
+      const items = (data as unknown as Ingredient[])
         .filter((i) => Number(i.current_stock) <= Number(i.min_stock))
         .sort((a, b) => Number(a.current_stock) - Number(b.current_stock))
       setLow(items)

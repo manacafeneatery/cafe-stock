@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { loadIngredients, MOVE_COLS } from '../lib/data'
 import type { Category, Ingredient, Movement } from '../lib/types'
 import { computeStats, LEVEL_LABEL, num, restockQty, rupiah, stockLevel, WINDOW_DAYS, type IngredientStat } from '../lib/analytics'
 
@@ -60,15 +61,15 @@ export default function Dashboard({ isAdmin }: { isAdmin: boolean }) {
     setLoading(true)
     const since = new Date(Date.now() - WINDOW_DAYS * 86400000).toISOString()
     const [a, b, c] = await Promise.all([
-      supabase.from('ingredients').select('*').eq('is_active', true).order('name'),
-      supabase.from('stock_movements').select('*').gte('created_at', since).in('type', ['out', 'waste']),
+      loadIngredients(isAdmin, true),
+      supabase.from('stock_movements').select(MOVE_COLS).gte('created_at', since).in('type', ['out', 'waste']),
       supabase.from('categories').select('*').order('name'),
     ])
     const err = a.error ?? b.error ?? c.error
     if (err) setError(err.message)
-    else { setIngs(a.data as Ingredient[]); setMoves(b.data as Movement[]); setCats(c.data as Category[]); setError('') }
+    else { setIngs(a.data); setMoves(b.data as unknown as Movement[]); setCats(c.data as Category[]); setError('') }
     setLoading(false)
-  }, [])
+  }, [isAdmin])
 
   useEffect(() => { load() }, [load])
 

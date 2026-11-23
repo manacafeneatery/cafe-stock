@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { loadIngredients } from '../lib/data'
 import type { Category, Ingredient } from '../lib/types'
 import { num } from '../lib/analytics'
 
@@ -14,10 +15,10 @@ export default function Opname({ isAdmin }: { isAdmin: boolean }) {
 
   const load = useCallback(async () => {
     const [a, b] = await Promise.all([
-      supabase.from('ingredients').select('*').eq('is_active', true).order('name'),
+      loadIngredients(false, true),
       supabase.from('categories').select('*').order('name'),
     ])
-    if (a.data) setIngs(a.data as Ingredient[])
+    setIngs(a.data)
     if (b.data) setCats(b.data as Category[])
   }, [])
   useEffect(() => { load() }, [load])

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
+import { loadIngredients } from '../lib/data'
 import type { Ingredient, Menu, RecipeItem } from '../lib/types'
 import { num, rupiah } from '../lib/analytics'
 
@@ -119,13 +120,13 @@ export default function Menus() {
     const [a, b, c] = await Promise.all([
       supabase.from('menus').select('*').order('name'),
       supabase.from('recipe_items').select('*'),
-      supabase.from('ingredients').select('*').eq('is_active', true).order('name'),
+      loadIngredients(true, true),
     ])
     const err = a.error ?? b.error ?? c.error
-    if (err) setMsg({ ok: false, text: `${err.message} (sudah menjalankan 003_recipes_opname_lastcost.sql?)` })
+    if (err) setMsg({ ok: false, text: `${err.message} (sudah menjalankan 003 dan 004 .sql?)` })
     if (a.data) setMenus(a.data as Menu[])
     if (b.data) setItems(b.data as RecipeItem[])
-    if (c.data) setIngs(c.data as Ingredient[])
+    setIngs(c.data)
   }, [])
   useEffect(() => { load() }, [load])
 

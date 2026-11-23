@@ -69,7 +69,7 @@ export default function Login() {
             {mode === 'login' ? 'Daftar' : 'Masuk'}
           </a>
         </p>
-        {mode === 'register' && <p className="muted center small">Akun pertama yang terdaftar otomatis menjadi Admin.</p>}
+        {mode === 'register' && <p className="muted center small">Akun baru perlu disetujui Admin sebelum bisa dipakai.</p>}
       </div>
     </div>
   )
