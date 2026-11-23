@@ -20,12 +20,16 @@ export interface IngredientStat extends Ingredient {
 export function computeStats(ingredients: Ingredient[], movements: Movement[]): IngredientStat[] {
   const usage = new Map<string, number>()
   for (const m of movements) {
-    if (m.type !== 'out' && m.type !== 'waste') continue   // opname & pembelian bukan pemakaian
-    usage.set(m.ingredient_id, (usage.get(m.ingredient_id) ?? 0) + Number(m.quantity))
+    // Pemakaian = keluar + waste; pembatalan penjualan (void_in) mengurangi. Opname & pembelian bukan pemakaian.
+    let d = 0
+    if (m.type === 'out' || m.type === 'waste') d = Number(m.quantity)
+    else if (m.type === 'void_in') d = -Number(m.quantity)
+    else continue
+    usage.set(m.ingredient_id, (usage.get(m.ingredient_id) ?? 0) + d)
   }
 
   return ingredients.map((i) => {
-    const used = usage.get(i.id) ?? 0
+    const used = Math.max(0, usage.get(i.id) ?? 0)
     const stock = Number(i.current_stock)
     const avgDaily = used / WINDOW_DAYS
     const daysLeft = avgDaily > 0 ? stock / avgDaily : null

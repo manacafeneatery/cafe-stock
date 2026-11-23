@@ -6,6 +6,7 @@ import { dateTime, num, rupiah } from '../lib/analytics'
 interface Sale {
   id: string; menu_id: string | null; menu_name: string; quantity: number
   unit_price: number; note: string | null; created_at: string
+  voided_at: string | null; void_reason: string | null
 }
 type Msg = { ok: boolean; text: string } | null
 
@@ -24,7 +25,7 @@ export default function Sales({ isAdmin }: { isAdmin: boolean }) {
   const load = useCallback(async () => {
     const [a, b] = await Promise.all([
       supabase.from('menus').select('id, name, price, is_active').eq('is_active', true).order('name'),
-      supabase.from('sales').select('id, menu_id, menu_name, quantity, unit_price, note, created_at')
+      supabase.from('sales').select('id, menu_id, menu_name, quantity, unit_price, note, created_at, voided_at, void_reason')
         .gte('created_at', startOfToday()).order('created_at', { ascending: false }).limit(100),
     ])
     if (a.error) setMsg({ ok: false, text: `${a.error.message} (sudah menjalankan 006_sales.sql?)` })
@@ -63,10 +64,21 @@ export default function Sales({ isAdmin }: { isAdmin: boolean }) {
     load()
   }
 
-  // Ringkasan hari ini
-  const items = sales.reduce((t, s) => t + s.quantity, 0)
-  const revenue = sales.reduce((t, s) => t + s.quantity * Number(s.unit_price), 0)
-  const totalCogs = [...cogs.values()].reduce((t, v) => t + v, 0)
+  const voidSale = async (s: Sale) => {
+    if (!window.confirm(`Batalkan penjualan "${s.menu_name} ×${s.quantity}"? Stok bahan akan dikembalikan.`)) return
+    const reason = window.prompt('Alasan pembatalan (opsional):', '') ?? ''
+    const { error } = await supabase.rpc('void_sale', { p_sale: s.id, p_reason: reason.trim() || null })
+    setMsg(error
+      ? { ok: false, text: `${error.message} (sudah menjalankan 007_void_sale.sql?)` }
+      : { ok: true, text: `Penjualan ${s.menu_name} ×${s.quantity} dibatalkan. Stok dikembalikan.` })
+    load()
+  }
+
+  // Ringkasan hari ini (penjualan yang dibatalkan tidak dihitung)
+  const active = sales.filter((s) => !s.voided_at)
+  const items = active.reduce((t, s) => t + s.quantity, 0)
+  const revenue = active.reduce((t, s) => t + s.quantity * Number(s.unit_price), 0)
+  const totalCogs = active.reduce((t, s) => t + (cogs.get(s.id) ?? 0), 0)
 
   return (
     <>
@@ -76,7 +88,7 @@ export default function Sales({ isAdmin }: { isAdmin: boolean }) {
 
       <div className="stats">
         <div className="stat"><span>Item terjual hari ini</span><strong>{num(items)}</strong></div>
-        <div className="stat"><span>Transaksi</span><strong>{sales.length}</strong></div>
+        <div className="stat"><span>Transaksi</span><strong>{active.length}</strong></div>
         {isAdmin && <div className="stat good"><span>Omzet</span><strong>{rupiah(revenue)}</strong></div>}
         {isAdmin && <div className="stat"><span>Laba kotor</span><strong>{rupiah(revenue - totalCogs)}</strong></div>}
       </div>
@@ -126,14 +138,18 @@ export default function Sales({ isAdmin }: { isAdmin: boolean }) {
         {sales.length === 0 ? <p className="empty">Belum ada penjualan hari ini.</p> : (
           <ul className="list">
             {sales.map((s) => (
-              <li key={s.id}>
+              <li key={s.id} className={s.voided_at ? 'voided' : ''}>
                 <div className="row-main">
-                  <strong>{s.menu_name} <span className="muted">×{s.quantity}</span></strong>
-                  <span className="muted small">{dateTime(s.created_at)}{s.note ? ` · ${s.note}` : ''}</span>
+                  <strong>{s.menu_name} <span className="muted">×{s.quantity}</span> {s.voided_at && <span className="pill empty">Dibatalkan</span>}</strong>
+                  <span className="muted small">
+                    {dateTime(s.created_at)}{s.note ? ` · ${s.note}` : ''}
+                    {s.voided_at ? ` · batal ${dateTime(s.voided_at)}${s.void_reason ? `: ${s.void_reason}` : ''}` : ''}
+                  </span>
                 </div>
                 <div className="row-side">
-                  <strong>{rupiah(s.quantity * Number(s.unit_price))}</strong>
-                  {isAdmin && cogs.has(s.id) && <span className="muted small">HPP {rupiah(cogs.get(s.id)!)}</span>}
+                  <strong className="amount">{rupiah(s.quantity * Number(s.unit_price))}</strong>
+                  {isAdmin && cogs.has(s.id) && !s.voided_at && <span className="muted small">HPP {rupiah(cogs.get(s.id)!)}</span>}
+                  {isAdmin && !s.voided_at && <button className="btn-ghost sm danger" onClick={() => voidSale(s)}>Batalkan</button>}
                 </div>
               </li>
             ))}

@@ -1,6 +1,6 @@
 export type Role = 'admin' | 'staff' | 'pending'
-export type MovementType = 'in' | 'out' | 'waste' | 'adjust_in' | 'adjust_out'
-export const isIncoming = (t: MovementType) => t === 'in' || t === 'adjust_in'
+export type MovementType = 'in' | 'out' | 'waste' | 'adjust_in' | 'adjust_out' | 'void_in'
+export const isIncoming = (t: MovementType) => t === 'in' || t === 'adjust_in' || t === 'void_in'
 
 export interface Menu {
   id: string

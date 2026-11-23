@@ -62,7 +62,7 @@ export default function Dashboard({ isAdmin }: { isAdmin: boolean }) {
     const since = new Date(Date.now() - WINDOW_DAYS * 86400000).toISOString()
     const [a, b, c] = await Promise.all([
       loadIngredients(isAdmin, true),
-      supabase.from('stock_movements').select(MOVE_COLS).gte('created_at', since).in('type', ['out', 'waste']),
+      supabase.from('stock_movements').select(MOVE_COLS).gte('created_at', since).in('type', ['out', 'waste', 'void_in']),
       supabase.from('categories').select('*').order('name'),
     ])
     const err = a.error ?? b.error ?? c.error
