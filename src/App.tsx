@@ -6,12 +6,13 @@ import Dashboard from './pages/Dashboard'
 import StockEntry from './pages/StockEntry'
 import Opname from './pages/Opname'
 import Sales from './pages/Sales'
+import ImportPos from './pages/ImportPos'
 import Menus from './pages/Menus'
 import Ingredients from './pages/Ingredients'
 import Members from './pages/Members'
 import Bell from './components/Bell'
 
-type Tab = 'dashboard' | 'sales' | 'entry' | 'opname' | 'menus' | 'ingredients' | 'members'
+type Tab = 'dashboard' | 'sales' | 'entry' | 'opname' | 'import' | 'menus' | 'ingredients' | 'members'
 
 const PRIMARY_COUNT = 4   // menu utama di navigasi bawah (HP); sisanya masuk "Lainnya"
 
@@ -56,6 +57,7 @@ export default function App() {
     { id: 'sales', label: 'Penjualan', icon: '💰' },
     { id: 'entry', label: 'Entry Stok', icon: '📝' },
     { id: 'opname', label: 'Opname', icon: '✅' },
+    { id: 'import', label: 'Impor Kasir', icon: '📥' },
     ...(isAdmin ? [
       { id: 'menus' as Tab, label: 'Menu', icon: '🍹' },
       { id: 'ingredients' as Tab, label: 'Bahan', icon: '🧾' },
@@ -111,6 +113,7 @@ export default function App() {
         {tab === 'sales' && <Sales isAdmin={isAdmin} />}
         {tab === 'entry' && <StockEntry isAdmin={isAdmin} />}
         {tab === 'opname' && <Opname isAdmin={isAdmin} />}
+        {tab === 'import' && <ImportPos isAdmin={isAdmin} />}
         {tab === 'menus' && isAdmin && <Menus />}
         {tab === 'ingredients' && isAdmin && <Ingredients />}
         {tab === 'members' && isAdmin && <Members />}

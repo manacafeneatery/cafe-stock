@@ -109,6 +109,8 @@ form { display: flex; flex-direction: column; gap: 14px; }
 .tile.on .stepper button:last-child { background: var(--brand); }
 .cart { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; border-top: 1px solid var(--line); padding-top: 14px; }
 .cart-note { flex: 2 1 220px; } .cart-sum { display: flex; flex-direction: column; text-align: right; min-width: 110px; } .cart-sum strong { font-size: 1.3rem; }
+.map-select { min-width: 190px; padding: 8px 10px; }
+.stat-sm { font-size: 1rem !important; }
 .progress-card { border-left: 5px solid var(--brick); gap: 8px; }
 .progress-card.ok { border-left-color: var(--brand); }
 .progress-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }

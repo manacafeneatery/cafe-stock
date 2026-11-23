@@ -12,11 +12,13 @@ export default function More() {
   const { profile, isAdmin, signOut } = useAuth()
   const { confirm } = useDialog()
 
-  const items = [
-    { path: '/menus', icon: 'restaurant-outline', title: 'Menu & Resep', sub: 'HPP per porsi, margin, resep' },
-    { path: '/ingredients', icon: 'cube-outline', title: 'Bahan & HPP', sub: 'Kategori, stok minimum, harga' },
-    { path: '/members', icon: 'people-outline', title: 'Karyawan', sub: 'Setujui akun & atur peran' },
+  const all = [
+    { path: '/import', icon: 'download-outline', title: 'Impor Kasir', sub: 'Potong stok dari laporan penjualan Ideku', admin: false },
+    { path: '/menus', icon: 'restaurant-outline', title: 'Menu & Resep', sub: 'HPP per porsi, margin, resep', admin: true },
+    { path: '/ingredients', icon: 'cube-outline', title: 'Bahan & HPP', sub: 'Kategori, stok minimum, harga', admin: true },
+    { path: '/members', icon: 'people-outline', title: 'Karyawan', sub: 'Setujui akun & atur peran', admin: true },
   ] as const
+  const items = all.filter((i) => isAdmin || !i.admin)
 
   const logout = async () => { if (await confirm('Keluar dari akun?', undefined, 'Keluar')) signOut() }
 
@@ -33,7 +35,7 @@ export default function More() {
         </View>
       </Card>
 
-      {isAdmin ? (
+      {items.length > 0 ? (
         <Card style={{ padding: 6, gap: 0 }}>
           {items.map((it, i) => (
             <Pressable key={it.path} onPress={() => router.navigate(it.path)}
@@ -49,9 +51,8 @@ export default function More() {
             </Pressable>
           ))}
         </Card>
-      ) : (
-        <Card><Txt muted>Menu Bahan, Menu & Resep, dan Karyawan hanya tersedia untuk Admin.</Txt></Card>
-      )}
+      ) : null}
+      {!isAdmin ? <Card><Txt muted>Menu Bahan, Menu & Resep, dan Karyawan hanya tersedia untuk Admin.</Txt></Card> : null}
 
       <Button title="Keluar" variant="danger" onPress={logout} />
       <Txt muted small align="center">Cafe Stock v{Constants.expoConfig?.version ?? '1.0.0'}</Txt>
