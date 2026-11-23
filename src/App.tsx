@@ -13,9 +13,12 @@ import Bell from './components/Bell'
 
 type Tab = 'dashboard' | 'sales' | 'entry' | 'opname' | 'menus' | 'ingredients' | 'members'
 
+const PRIMARY_COUNT = 4   // menu utama di navigasi bawah (HP); sisanya masuk "Lainnya"
+
 export default function App() {
   const { session, profile, loading, signOut } = useAuth()
   const [tab, setTab] = useState<Tab>('dashboard')
+  const [more, setMore] = useState(false)
 
   if (!isConfigured) {
     return (
@@ -59,17 +62,22 @@ export default function App() {
       { id: 'members' as Tab, label: 'Karyawan', icon: '👥' },
     ] : []),
   ]
+  const secondary = tabs.slice(PRIMARY_COUNT)
+  const go = (id: Tab) => { setTab(id); setMore(false); window.scrollTo({ top: 0 }) }
 
   return (
     <div className="shell">
       <aside className="nav">
         <div className="brand"><span className="logo">☕</span> Cafe Stock</div>
         <nav>
-          {tabs.map((t) => (
-            <button key={t.id} className={tab === t.id ? 'active' : ''} onClick={() => setTab(t.id)}>
+          {tabs.map((t, i) => (
+            <button key={t.id} className={`${tab === t.id ? 'active' : ''} ${i >= PRIMARY_COUNT ? 'secondary' : ''}`} onClick={() => go(t.id)}>
               <span>{t.icon}</span><em>{t.label}</em>
             </button>
           ))}
+          <button className={`more-btn ${more || secondary.some((t) => t.id === tab) ? 'active' : ''}`} onClick={() => setMore(!more)}>
+            <span>☰</span><em>Lainnya</em>
+          </button>
         </nav>
         <div className="user">
           <div>
@@ -79,6 +87,24 @@ export default function App() {
           <button className="btn-ghost" onClick={signOut}>Keluar</button>
         </div>
       </aside>
+
+      {more && (
+        <div className="sheet-backdrop" onClick={() => setMore(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-user">
+              <strong>{profile.full_name}</strong>
+              <span className={`badge ${isAdmin ? 'badge-brand' : ''}`}>{isAdmin ? 'Admin' : 'Karyawan'}</span>
+            </div>
+            {secondary.map((t) => (
+              <button key={t.id} className={`sheet-item ${tab === t.id ? 'active' : ''}`} onClick={() => go(t.id)}>
+                <span>{t.icon}</span>{t.label}
+              </button>
+            ))}
+            <button className="sheet-item danger" onClick={signOut}><span>🚪</span>Keluar</button>
+          </div>
+        </div>
+      )}
+
       <main className="content">
         <div className="topbar"><Bell /></div>
         {tab === 'dashboard' && <Dashboard isAdmin={isAdmin} />}

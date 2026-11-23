@@ -1,4 +1,4 @@
-/* Palet: hijau (brand), hitam (struktur), merah bata (peringatan/aksen) */
+﻿/* Palet: hijau (brand), hitam (struktur), merah bata (peringatan/aksen) */
 :root {
   --black: #0c100e; --black-2: #151b18;
   --bg: #f2f4f1; --surface: #ffffff; --text: #141a17; --muted: #66746d; --line: #e2e7e3;
@@ -162,13 +162,60 @@ tfoot td { border-top: 2px solid var(--line); }
 .spinner { width: 32px; height: 32px; border: 3px solid var(--line); border-top-color: var(--brand); border-radius: 50%; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ---------- Mobile: navigasi bawah ---------- */
+/* ---------- Dasar responsif (semua layar) ---------- */
+html, body { overflow-x: hidden; max-width: 100%; }
+.content, .card, .page-head > div { min-width: 0; }
+.grid { grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); }
+.grid.two { grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); }
+.form-row { grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); }
+.tiles { grid-template-columns: repeat(auto-fill, minmax(min(150px, 100%), 1fr)); }
+.nav nav button.more-btn, .sheet-backdrop { display: none; }
+
+/* ---------- Mobile ---------- */
 @media (max-width: 800px) {
-  .shell { grid-template-columns: 1fr; padding-bottom: 84px; }
-  .nav { position: fixed; bottom: 0; left: 0; right: 0; top: auto; height: auto; flex-direction: row; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); z-index: 20; gap: 2px; border-radius: 20px 20px 0 0; }
-  .brand { display: none; }
-  .nav nav { flex-direction: row; justify-content: space-around; }
-  .nav nav button { flex-direction: column; gap: 2px; padding: 6px 8px; font-size: .68rem; align-items: center; }
-  .user { border: 0; padding: 0; } .user > div { display: none; }
+  .shell { grid-template-columns: minmax(0, 1fr); min-height: 100dvh; padding-bottom: calc(78px + env(safe-area-inset-bottom)); }
+  .center-screen { min-height: 100dvh; }
+
+  /* Navigasi bawah: 4 menu utama + Lainnya */
+  .nav { position: fixed; bottom: 0; left: 0; right: 0; top: auto; height: auto; flex-direction: row; padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); z-index: 20; gap: 0; border-radius: 20px 20px 0 0; }
+  .brand, .user { display: none; }
+  .nav nav { flex-direction: row; width: 100%; gap: 2px; }
+  .nav nav button { flex: 1 1 0; min-width: 0; flex-direction: column; justify-content: center; align-items: center; gap: 2px; padding: 8px 2px; font-size: .68rem; text-align: center; border-radius: 12px; }
+  .nav nav button span { font-size: 1.25rem; line-height: 1; }
+  .nav nav button.secondary { display: none; }
+  .nav nav button.more-btn { display: flex; }
+
+  .sheet-backdrop { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 15; }
+  .sheet { position: absolute; left: 0; right: 0; bottom: calc(66px + env(safe-area-inset-bottom)); background: var(--surface); border-radius: 22px 22px 0 0; padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 2px; box-shadow: 0 -10px 40px rgba(0,0,0,.3); }
+  .sheet-user { display: flex; justify-content: space-between; align-items: center; padding: 4px 12px 10px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+  .sheet-item { display: flex; align-items: center; gap: 14px; padding: 14px 12px; border: 0; background: none; border-radius: 14px; font: inherit; font-weight: 500; color: var(--text); text-align: left; cursor: pointer; }
+  .sheet-item span { font-size: 1.2rem; width: 26px; text-align: center; }
+  .sheet-item.active { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
+  .sheet-item.danger { color: var(--brick); }
+
+  /* Ukuran & jarak lebih ringkas */
+  .content { padding: 6px 14px 20px; }
+  .topbar { height: 40px; margin-bottom: 0; }
+  h1 { font-size: 1.35rem; }
+  .page-head { margin-bottom: 12px; gap: 8px; }
+  .card { padding: 14px; border-radius: 16px; margin-bottom: 12px; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .stat { padding: 12px 14px; } .stat strong { font-size: 1.25rem; overflow-wrap: anywhere; }
+  .grid, .grid.two, .form-row { grid-template-columns: minmax(0, 1fr); }
+  input, select { font-size: 16px; }   /* mencegah iOS memperbesar layar saat mengetik */
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .cart .btn { width: 100%; } .cart-sum { text-align: left; }
   .menu-head { flex-wrap: wrap; } .menu-figures { order: 3; width: 100%; justify-content: space-between; text-align: left; }
+  .bell-panel { position: fixed; left: 12px; right: 12px; top: 60px; width: auto; }
+  .login { padding: 22px; }
+
+  /* Tabel panjang -> tampil sebagai kartu */
+  .rtable thead { display: none; }
+  .rtable, .rtable tbody, .rtable tr, .rtable td { display: block; width: 100%; }
+  .rtable tr { border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin-bottom: 10px; background: var(--bg); }
+  .rtable td { display: flex; justify-content: space-between; align-items: center; gap: 12px; border: 0; padding: 5px 0; text-align: right; }
+  .rtable td[data-label]::before { content: attr(data-label); color: var(--muted); font-size: .78rem; text-align: left; }
+  .rtable td.cell-title { display: block; text-align: left; padding-bottom: 8px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+  .rtable td.cell-actions { justify-content: flex-end; flex-wrap: wrap; padding-top: 8px; margin-top: 4px; border-top: 1px solid var(--line); }
+  .rtable td.empty { display: block; text-align: center; }
 }

@@ -208,24 +208,24 @@ export default function Ingredients() {
         </div>
         <input className="search" placeholder="🔍 Cari bahan…" value={q} onChange={(e) => setQ(e.target.value)} />
         <div className="table-wrap">
-          <table>
+          <table className="rtable">
             <thead><tr><th>Bahan</th><th className="r">Stok</th><th>Status</th><th className="r">Stok minimum</th><th className="r">HPP / unit</th><th className="r">Harga beli terakhir</th><th className="r">Nilai stok</th><th /></tr></thead>
             <tbody>
               {filtered.map((i) => {
                 const lv = stockLevel(i.current_stock, i.min_stock)
                 return (
                   <tr key={i.id} className={i.is_active ? '' : 'off'}>
-                    <td><strong>{i.name}</strong><br /><span className="muted small">{(i.category_id && catName.get(i.category_id)) || 'Tanpa kategori'}</span></td>
-                    <td className="r">{num(i.current_stock)} {i.unit}</td>
-                    <td><span className={`pill ${lv}`}>{LEVEL_LABEL[lv]}</span></td>
-                    <td className="r">
+                    <td className="cell-title"><strong>{i.name}</strong><br /><span className="muted small">{(i.category_id && catName.get(i.category_id)) || 'Tanpa kategori'}</span></td>
+                    <td className="r" data-label="Stok">{num(i.current_stock)} {i.unit}</td>
+                    <td data-label="Status"><span className={`pill ${lv}`}>{LEVEL_LABEL[lv]}</span></td>
+                    <td className="r" data-label="Stok minimum">
                       <input className="min-input" type="number" min="0" step="any" defaultValue={i.min_stock} key={`${i.id}-${i.min_stock}`}
                         onBlur={(e) => saveMin(i, e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} aria-label={`Stok minimum ${i.name}`} />
                     </td>
-                    <td className="r">{rupiah(i.avg_cost)}</td>
-                    <td className="r">{i.last_cost > 0 ? rupiah(i.last_cost) : '—'}</td>
-                    <td className="r"><strong>{rupiah(i.current_stock * i.avg_cost)}</strong></td>
-                    <td className="r nowrap">
+                    <td className="r" data-label="HPP / unit">{rupiah(i.avg_cost)}</td>
+                    <td className="r" data-label="Harga beli terakhir">{i.last_cost > 0 ? rupiah(i.last_cost) : '—'}</td>
+                    <td className="r" data-label="Nilai stok"><strong>{rupiah(i.current_stock * i.avg_cost)}</strong></td>
+                    <td className="r nowrap cell-actions">
                       <button className="btn-ghost sm" onClick={() => startEdit(i)}>Ubah</button>
                       <button className="btn-ghost sm" onClick={() => openCost(i)}>Atur harga</button>
                       <button className="btn-ghost sm" onClick={() => toggle(i)}>{i.is_active ? 'Nonaktifkan' : 'Aktifkan'}</button>
