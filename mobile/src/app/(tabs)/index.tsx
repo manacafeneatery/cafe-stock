@@ -1,15 +1,15 @@
 import { useCallback, useMemo, useState } from 'react'
 import { View } from 'react-native'
-import { useFocusEffect } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { supabase } from '@/lib/supabase'
-import { MOVE_COLS, loadIngredients } from '@/lib/data'
+import { MOVE_COLS, loadIngredients, startOfToday } from '@/lib/data'
 import { useAuth } from '@/lib/auth'
 import { useTheme } from '@/lib/theme'
 import type { Category, Ingredient, Movement } from '@/lib/types'
 import {
   computeStats, LEVEL_LABEL, num, restockQty, rupiah, stockLevel, WINDOW_DAYS, type IngredientStat,
 } from '@/lib/analytics'
-import { Bar, Card, CardHead, Chips, Empty, List, Notice, PageTitle, Pill, Row, Screen, Stat, StatGrid, Txt } from '@/components/ui'
+import { Bar, Button, Card, CardHead, Chips, Empty, List, Notice, PageTitle, Pill, Row, Screen, Stat, StatGrid, Txt } from '@/components/ui'
 
 type Kind = 'fast' | 'low' | 'slow'
 
@@ -71,18 +71,28 @@ export default function Dashboard() {
   const [filter, setFilter] = useState('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [opname, setOpname] = useState<{ done: number; total: number } | null>(null)
+  const router = useRouter()
+  const theme = useTheme()
 
   const load = useCallback(async () => {
     setLoading(true)
     const since = new Date(Date.now() - WINDOW_DAYS * 86400000).toISOString()
-    const [a, b, c] = await Promise.all([
+    const [a, b, c, d] = await Promise.all([
       loadIngredients(isAdmin, true),
       supabase.from('stock_movements').select(MOVE_COLS).gte('created_at', since).in('type', ['out', 'waste', 'void_in']),
       supabase.from('categories').select('*').order('name'),
+      supabase.rpc('opname_today', { p_since: startOfToday() }),
     ])
     const err = a.error ?? b.error ?? c.error
     if (err) setError(err.message)
     else { setIngs(a.data); setMoves(b.data as unknown as Movement[]); setCats(c.data as Category[]); setError('') }
+    // Pengingat opname harian (diabaikan bila SQL 009 belum dijalankan)
+    if (d.error) setOpname(null)
+    else {
+      const ids = new Set(((d.data ?? []) as { ingredient_id: string }[]).map((r) => r.ingredient_id))
+      setOpname({ done: a.data.filter((i) => ids.has(i.id)).length, total: a.data.length })
+    }
     setLoading(false)
   }, [isAdmin])
 
@@ -103,6 +113,22 @@ export default function Dashboard() {
     <Screen onRefresh={load} refreshing={loading}>
       <PageTitle title="Ringkasan Stok" subtitle={`Analisis pemakaian ${WINDOW_DAYS} hari terakhir`} />
       {error ? <Notice ok={false} text={error} /> : null}
+
+      {/* Pengingat opname harian */}
+      {opname && opname.total > 0 ? (
+        opname.done < opname.total ? (
+          <Card style={{ borderLeftWidth: 5, borderLeftColor: theme.brick, gap: 8 }}>
+            <Txt bold size={16}>⚠️ {opname.total - opname.done} bahan belum di-opname hari ini</Txt>
+            <Txt muted small>{opname.done} dari {opname.total} bahan sudah dihitung.</Txt>
+            <Button title="Mulai opname" onPress={() => router.navigate('/opname')} />
+          </Card>
+        ) : (
+          <Card style={{ borderLeftWidth: 5, borderLeftColor: theme.brand, gap: 4 }}>
+            <Txt bold color={theme.brand}>✅ Opname hari ini selesai</Txt>
+            <Txt muted small>Semua {opname.total} bahan sudah dihitung.</Txt>
+          </Card>
+        )
+      ) : null}
 
       {cats.length > 0 ? (
         <Chips value={filter} onChange={setFilter}

@@ -5,6 +5,13 @@ import type { Ingredient } from './types'
 export const ING_COLS = 'id, name, unit, category, category_id, min_stock, current_stock, is_active'
 export const MOVE_COLS = 'id, ingredient_id, type, quantity, note, created_by, created_at'
 
+// Awal hari ini (waktu lokal perangkat) dalam format ISO
+export const startOfToday = () => {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  return d.toISOString()
+}
+
 /**
  * Ambil daftar bahan. HPP (avg_cost) & harga beli terakhir (last_cost) hanya
  * diambil bila withCosts = true (khusus Admin; RLS menolak untuk Karyawan).

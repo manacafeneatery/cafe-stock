@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { loadIngredients, MOVE_COLS } from '../lib/data'
+import { loadIngredients, MOVE_COLS, startOfToday } from '../lib/data'
 import type { Category, Ingredient, Movement } from '../lib/types'
 import { computeStats, LEVEL_LABEL, num, restockQty, rupiah, stockLevel, WINDOW_DAYS, type IngredientStat } from '../lib/analytics'
 
@@ -49,7 +49,8 @@ function Section({ title, hint, tone, items, kind, catName }: {
   )
 }
 
-export default function Dashboard({ isAdmin }: { isAdmin: boolean }) {
+export default function Dashboard({ isAdmin, onOpname }: { isAdmin: boolean; onOpname: () => void }) {
+  const [opname, setOpname] = useState<{ done: number; total: number } | null>(null)
   const [ings, setIngs] = useState<Ingredient[]>([])
   const [moves, setMoves] = useState<Movement[]>([])
   const [cats, setCats] = useState<Category[]>([])
@@ -60,14 +61,21 @@ export default function Dashboard({ isAdmin }: { isAdmin: boolean }) {
   const load = useCallback(async () => {
     setLoading(true)
     const since = new Date(Date.now() - WINDOW_DAYS * 86400000).toISOString()
-    const [a, b, c] = await Promise.all([
+    const [a, b, c, d] = await Promise.all([
       loadIngredients(isAdmin, true),
       supabase.from('stock_movements').select(MOVE_COLS).gte('created_at', since).in('type', ['out', 'waste', 'void_in']),
       supabase.from('categories').select('*').order('name'),
+      supabase.rpc('opname_today', { p_since: startOfToday() }),
     ])
     const err = a.error ?? b.error ?? c.error
     if (err) setError(err.message)
     else { setIngs(a.data); setMoves(b.data as unknown as Movement[]); setCats(c.data as Category[]); setError('') }
+    // Pengingat opname harian (diabaikan bila SQL 009 belum dijalankan)
+    if (d.error) setOpname(null)
+    else {
+      const ids = new Set(((d.data ?? []) as { ingredient_id: string }[]).map((r) => r.ingredient_id))
+      setOpname({ done: a.data.filter((i) => ids.has(i.id)).length, total: a.data.length })
+    }
     setLoading(false)
   }, [isAdmin])
 
@@ -92,6 +100,22 @@ export default function Dashboard({ isAdmin }: { isAdmin: boolean }) {
       </header>
 
       {error && <div className="alert err">{error}</div>}
+      {opname && opname.total > 0 && (
+        opname.done < opname.total ? (
+          <section className="card progress-card">
+            <div className="progress-head">
+              <strong>⚠️ {opname.total - opname.done} bahan belum di-opname hari ini</strong>
+              <button className="btn" onClick={onOpname}>Mulai opname</button>
+            </div>
+            <span className="muted small">{opname.done} dari {opname.total} bahan sudah dihitung.</span>
+          </section>
+        ) : (
+          <section className="card progress-card ok">
+            <strong className="pos">✅ Opname hari ini selesai</strong>
+            <span className="muted small">Semua {opname.total} bahan sudah dihitung.</span>
+          </section>
+        )
+      )}
       {cats.length > 0 && (
         <div className="chips">
           <button className={filter === 'all' ? 'on' : ''} onClick={() => setFilter('all')}>Semua</button>

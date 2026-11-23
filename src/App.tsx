@@ -107,7 +107,7 @@ export default function App() {
 
       <main className="content">
         <div className="topbar"><Bell /></div>
-        {tab === 'dashboard' && <Dashboard isAdmin={isAdmin} />}
+        {tab === 'dashboard' && <Dashboard isAdmin={isAdmin} onOpname={() => go('opname')} />}
         {tab === 'sales' && <Sales isAdmin={isAdmin} />}
         {tab === 'entry' && <StockEntry isAdmin={isAdmin} />}
         {tab === 'opname' && <Opname isAdmin={isAdmin} />}
