@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { loadIngredients } from '../lib/data'
 import type { Category, Ingredient } from '../lib/types'
-import { num } from '../lib/analytics'
+import { dateTime, num } from '../lib/analytics'
+
+interface Session {
+  session_key: string; performed_at: string; user_name: string; item_count: number
+  items: { name: string; unit: string; diff: number; note: string | null }[]
+}
 
 export default function Opname({ isAdmin }: { isAdmin: boolean }) {
   const [ings, setIngs] = useState<Ingredient[]>([])
@@ -12,12 +17,15 @@ export default function Opname({ isAdmin }: { isAdmin: boolean }) {
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [history, setHistory] = useState<Session[]>([])
 
   const load = useCallback(async () => {
-    const [a, b] = await Promise.all([
+    const [a, b, h] = await Promise.all([
       loadIngredients(false, true),
       supabase.from('categories').select('*').order('name'),
+      supabase.rpc('opname_history', { p_limit: 15 }),
     ])
+    setHistory((h.data ?? []) as Session[])
     setIngs(a.data)
     if (b.data) setCats(b.data as Category[])
   }, [])
@@ -43,7 +51,9 @@ export default function Opname({ isAdmin }: { isAdmin: boolean }) {
     if (!window.confirm(`Simpan penyesuaian untuk ${changes.length} bahan? Stok sistem akan diubah mengikuti stok fisik.`)) return
     setBusy(true)
     const { data: u } = await supabase.auth.getUser()
+    const batch = crypto.randomUUID()   // satu sesi opname
     const rows = changes.map(({ ing, physical, diff }) => ({
+      batch_id: batch,
       ingredient_id: ing.id,
       type: diff > 0 ? 'adjust_in' : 'adjust_out',
       quantity: Math.abs(diff),
@@ -61,7 +71,15 @@ export default function Opname({ isAdmin }: { isAdmin: boolean }) {
   return (
     <>
       <header className="page-head">
-        <div><h1>Stok Opname</h1><p className="muted">Cocokkan stok sistem dengan hitungan fisik. Isi hanya bahan yang dihitung.</p></div>
+        <div>
+          <h1>Stok Opname</h1>
+          <p className="muted">Cocokkan stok sistem dengan hitungan fisik. Isi hanya bahan yang dihitung.</p>
+          <p className="small last-opname">
+            {history[0]
+              ? <>Opname terakhir: <strong>{dateTime(history[0].performed_at)}</strong> oleh <strong>{history[0].user_name}</strong> ({history[0].item_count} bahan)</>
+              : 'Belum ada riwayat opname.'}
+          </p>
+        </div>
         <button className="btn" disabled={busy || changes.length === 0} onClick={save}>
           {busy ? 'Menyimpan…' : `Simpan opname${changes.length ? ` (${changes.length})` : ''}`}
         </button>
@@ -106,6 +124,39 @@ export default function Opname({ isAdmin }: { isAdmin: boolean }) {
           </table>
         </div>
         {!isAdmin && <p className="muted small">Selisih tercatat di riwayat sebagai penyesuaian (opname) dan tidak dihitung sebagai pemakaian.</p>}
+      </section>
+
+      <section className="card">
+        <header className="card-head"><h3>Riwayat opname</h3><span className="badge">{history.length} sesi terakhir</span></header>
+        {history.length === 0 ? <p className="empty">Belum ada opname yang tersimpan.</p> : (
+          <div className="sessions">
+            {history.map((s, idx) => (
+              <details key={s.session_key} open={idx === 0}>
+                <summary>
+                  <div className="row-main">
+                    <strong>{dateTime(s.performed_at)}</strong>
+                    <span className="muted small">oleh {s.user_name}</span>
+                  </div>
+                  <span className="badge">{s.item_count} bahan</span>
+                </summary>
+                <ul className="list">
+                  {s.items.map((it, k) => (
+                    <li key={k}>
+                      <div className="row-main">
+                        <strong>{it.name}</strong>
+                        <span className="muted small">{it.note ?? ''}</span>
+                      </div>
+                      <div className="row-side">
+                        <strong className={Number(it.diff) > 0 ? 'pos' : 'neg'}>{Number(it.diff) > 0 ? '+' : ''}{num(Number(it.diff))}</strong>
+                        <span className="muted small">{it.unit}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ))}
+          </div>
+        )}
       </section>
     </>
   )
