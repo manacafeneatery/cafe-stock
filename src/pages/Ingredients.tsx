@@ -5,6 +5,7 @@ import type { Category, Ingredient } from '../lib/types'
 import { dateTime, LEVEL_LABEL, num, rupiah, stockLevel } from '../lib/analytics'
 
 const empty = { name: '', unit: 'gram', category_id: '', min_stock: '0' }
+const NEW_CAT = '__new__'   // nilai khusus di dropdown: tambah kategori baru
 type Msg = { ok: boolean; text: string } | null
 interface Adjustment {
   id: string; ingredient_id: string; old_avg: number; new_avg: number
@@ -19,6 +20,7 @@ export default function Ingredients() {
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('all')   // all | none | <category id>
   const [newCat, setNewCat] = useState('')
+  const [inlineCat, setInlineCat] = useState('')
   const [showCats, setShowCats] = useState(false)
   const [msg, setMsg] = useState<Msg>(null)
   const [costFor, setCostFor] = useState<Ingredient | null>(null)
@@ -56,6 +58,7 @@ export default function Ingredients() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (form.category_id === NEW_CAT) return setMsg({ ok: false, text: 'Simpan kategori baru dulu, atau pilih kategori lain.' })
     const payload = {
       name: form.name.trim(), unit: form.unit.trim(),
       category_id: form.category_id || null, min_stock: Math.max(0, Number(form.min_stock) || 0),
@@ -109,6 +112,20 @@ export default function Ingredients() {
     if (error) return setMsg({ ok: false, text: error.message.includes('duplicate') ? 'Kategori sudah ada.' : error.message })
     setNewCat(''); setMsg({ ok: true, text: `Kategori "${name}" ditambahkan.` }); load()
   }
+  // Tambah kategori langsung dari form bahan, lalu otomatis terpilih
+  const addCatInline = async () => {
+    const name = inlineCat.trim()
+    if (!name) return setMsg({ ok: false, text: 'Isi nama kategori terlebih dahulu.' })
+    const existing = cats.find((c) => c.name.toLowerCase() === name.toLowerCase())
+    if (existing) {
+      setForm((f) => ({ ...f, category_id: existing.id })); setInlineCat('')
+      return setMsg({ ok: true, text: `Kategori "${existing.name}" sudah ada dan dipilih.` })
+    }
+    const { data, error } = await supabase.from('categories').insert({ name }).select('id').single()
+    if (error || !data) return setMsg({ ok: false, text: error?.message ?? 'Gagal menyimpan kategori.' })
+    setForm((f) => ({ ...f, category_id: data.id as string })); setInlineCat('')
+    setMsg({ ok: true, text: `Kategori "${name}" ditambahkan dan dipilih.` }); load()
+  }
   const renameCat = async (c: Category) => {
     const name = window.prompt('Nama kategori baru:', c.name)?.trim()
     if (!name || name === c.name) return
@@ -139,8 +156,21 @@ export default function Ingredients() {
           <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
             <option value="">— Tanpa kategori —</option>
             {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <option value={NEW_CAT}>➕ Kategori baru…</option>
           </select>
         </label>
+        {form.category_id === NEW_CAT && (
+          <div className="new-cat">
+            <label>Nama kategori baru
+              <input value={inlineCat} onChange={(e) => setInlineCat(e.target.value)} placeholder="mis. Topping" autoFocus
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCatInline() } }} />
+            </label>
+            <div className="actions">
+              <button type="button" className="btn" onClick={addCatInline}>Simpan kategori</button>
+              <button type="button" className="btn-ghost" onClick={() => { setForm({ ...form, category_id: '' }); setInlineCat('') }}>Batal</button>
+            </div>
+          </div>
+        )}
         <label>Stok minimum {form.unit && `(${form.unit})`}
           <input type="number" min="0" step="any" value={form.min_stock} onChange={(e) => setForm({ ...form, min_stock: e.target.value })} />
         </label>
