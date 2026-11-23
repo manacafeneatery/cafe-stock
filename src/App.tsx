@@ -5,12 +5,13 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import StockEntry from './pages/StockEntry'
 import Opname from './pages/Opname'
+import Sales from './pages/Sales'
 import Menus from './pages/Menus'
 import Ingredients from './pages/Ingredients'
 import Members from './pages/Members'
 import Bell from './components/Bell'
 
-type Tab = 'dashboard' | 'entry' | 'opname' | 'menus' | 'ingredients' | 'members'
+type Tab = 'dashboard' | 'sales' | 'entry' | 'opname' | 'menus' | 'ingredients' | 'members'
 
 export default function App() {
   const { session, profile, loading, signOut } = useAuth()
@@ -49,6 +50,7 @@ export default function App() {
   const isAdmin = profile.role === 'admin'
   const tabs: { id: Tab; label: string; icon: string }[] = [
     { id: 'dashboard', label: 'Ringkasan', icon: '📊' },
+    { id: 'sales', label: 'Penjualan', icon: '💰' },
     { id: 'entry', label: 'Entry Stok', icon: '📝' },
     { id: 'opname', label: 'Opname', icon: '✅' },
     ...(isAdmin ? [
@@ -80,6 +82,7 @@ export default function App() {
       <main className="content">
         <div className="topbar"><Bell /></div>
         {tab === 'dashboard' && <Dashboard isAdmin={isAdmin} />}
+        {tab === 'sales' && <Sales isAdmin={isAdmin} />}
         {tab === 'entry' && <StockEntry isAdmin={isAdmin} />}
         {tab === 'opname' && <Opname isAdmin={isAdmin} />}
         {tab === 'menus' && isAdmin && <Menus />}
