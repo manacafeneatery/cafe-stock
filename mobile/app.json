@@ -32,6 +32,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "owner": "mana.cafeneatery",
+    "extra": {
+      "eas": {
+        "projectId": "8edb752a-2317-448a-a7b4-68297203eae6"
+      }
     }
   }
 }
