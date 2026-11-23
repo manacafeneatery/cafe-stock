@@ -1,4 +1,8 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-export default defineConfig({ plugins: [react()] })
+// Dipublikasikan di https://<user>.github.io/cafe-stock/ (GitHub Pages)
+export default defineConfig(({ command }) => ({
+  plugins: [react()],
+  base: command === 'build' ? '/cafe-stock/' : '/',
+}))
