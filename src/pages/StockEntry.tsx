@@ -17,7 +17,8 @@ export default function StockEntry({ isAdmin }: { isAdmin: boolean }) {
   const [type, setType] = useState<MovementType>('out')
   const [ingId, setIngId] = useState('')
   const [qty, setQty] = useState('')
-  const [price, setPrice] = useState('')        // total harga beli (untuk "Masuk")
+  const [price, setPrice] = useState('')        // harga beli (untuk "Masuk"): per satuan atau total nota
+  const [priceMode, setPriceMode] = useState<'unit' | 'total'>('unit')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -38,13 +39,34 @@ export default function StockEntry({ isAdmin }: { isAdmin: boolean }) {
   const selected = ings.find((i) => i.id === ingId)
   const nameOf = (id: string) => ings.find((i) => i.id === id)
 
+  const q = Number(qty)
+  const p = Number(price)
+  const hasPrice = price !== '' && p >= 0
+  const unitCost = !hasPrice ? 0 : priceMode === 'unit' ? p : q > 0 ? p / q : 0
+  const totalCost = !hasPrice ? 0 : priceMode === 'unit' ? p * q : p
+
+  // Isi otomatis dengan harga beli terakhir bila ada (khusus Admin; Karyawan tidak melihat harga)
+  const prefill = (ing: Ingredient | undefined) => {
+    if (ing && ing.last_cost > 0) { setPriceMode('unit'); setPrice(String(ing.last_cost)) }
+    else { setPriceMode('total'); setPrice('') }
+  }
+  const changeIngredient = (id: string) => { setIngId(id); prefill(ings.find((i) => i.id === id)) }
+  const changeType = (t: MovementType) => {
+    setType(t); setMsg(null)
+    if (t === 'in' && price === '') prefill(selected)
+  }
+  // Pindah mode harga sambil mengonversi angka yang sudah terisi
+  const changeMode = (m: 'unit' | 'total') => {
+    if (m === priceMode) return
+    if (price !== '' && q > 0) setPrice(String(m === 'total' ? Math.round(p * q * 100) / 100 : Math.round((p / q) * 100) / 100))
+    setPriceMode(m)
+  }
+
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (!selected) return
-    const q = Number(qty)
-    const total = Number(price)
     if (!(q > 0)) return setMsg({ ok: false, text: 'Jumlah harus lebih dari 0.' })
-    if (type === 'in' && !(total >= 0)) return setMsg({ ok: false, text: 'Isi total harga pembelian.' })
+    if (type === 'in' && !hasPrice) return setMsg({ ok: false, text: 'Isi harga pembelian.' })
 
     setBusy(true)
     const { data: u } = await supabase.auth.getUser()
@@ -52,14 +74,16 @@ export default function StockEntry({ isAdmin }: { isAdmin: boolean }) {
       ingredient_id: selected.id,
       type,
       quantity: q,
-      unit_cost: type === 'in' ? total / q : 0,
+      unit_cost: type === 'in' ? unitCost : 0,
       note: note.trim() || null,
       created_by: u.user?.id,
     })
     setBusy(false)
     if (error) return setMsg({ ok: false, text: error.message })
     setMsg({ ok: true, text: `Tersimpan: ${TYPES.find((t) => t.id === type)!.label} ${num(q)} ${selected.unit} ${selected.name}` })
-    setQty(''); setPrice(''); setNote('')
+    setQty(''); setNote('')
+    // pembelian berikutnya: harga terakhir yang baru tersimpan akan terisi lagi setelah data dimuat ulang
+    if (type === 'in') { setPriceMode('unit'); setPrice(String(Math.round(unitCost * 100) / 100)) } else setPrice('')
     load()
   }
 
@@ -73,14 +97,14 @@ export default function StockEntry({ isAdmin }: { isAdmin: boolean }) {
         <form className="card" onSubmit={submit}>
           <div className="segmented three">
             {TYPES.map((t) => (
-              <button type="button" key={t.id} className={type === t.id ? 'on' : ''} onClick={() => { setType(t.id); setMsg(null) }}>
+              <button type="button" key={t.id} className={type === t.id ? 'on' : ''} onClick={() => changeType(t.id)}>
                 {t.icon} {t.label}
               </button>
             ))}
           </div>
 
           <label>Bahan
-            <select value={ingId} onChange={(e) => setIngId(e.target.value)} required>
+            <select value={ingId} onChange={(e) => changeIngredient(e.target.value)} required>
               <option value="">— Pilih bahan —</option>
               {[...cats, { id: '', name: 'Tanpa kategori' }].map((c) => {
                 const items = ings.filter((i) => (i.category_id ?? '') === c.id)
@@ -98,15 +122,26 @@ export default function StockEntry({ isAdmin }: { isAdmin: boolean }) {
           </label>
 
           {type === 'in' && (
-            <label>Total harga pembelian (Rp)
-              <input type="number" inputMode="numeric" min="0" value={price} onChange={(e) => setPrice(e.target.value)} required placeholder="0" />
-              {Number(qty) > 0 && Number(price) >= 0 && price !== '' && selected && (
-                <small className="muted">≈ {rupiah(Number(price) / Number(qty))} per {selected.unit}</small>
-              )}
-              {selected && selected.last_cost > 0 && (
-                <small className="muted">Harga beli terakhir: {rupiah(selected.last_cost)} per {selected.unit}</small>
-              )}
-            </label>
+            <>
+              <div className="segmented">
+                <button type="button" className={priceMode === 'unit' ? 'on' : ''} onClick={() => changeMode('unit')}>Harga satuan</button>
+                <button type="button" className={priceMode === 'total' ? 'on' : ''} onClick={() => changeMode('total')}>Total nota</button>
+              </div>
+              <label>{priceMode === 'unit' ? `Harga per ${selected?.unit ?? 'satuan'} (Rp)` : 'Total harga pembelian (Rp)'}
+                <input type="number" inputMode="decimal" step="any" min="0" value={price} onChange={(e) => setPrice(e.target.value)} required placeholder="0" />
+                {selected && selected.last_cost > 0 && (
+                  <small className="muted">
+                    Harga beli terakhir: {rupiah(selected.last_cost)} per {selected.unit}
+                    {priceMode === 'unit' && Number(price) === selected.last_cost ? ' — terisi otomatis, ubah jika harganya berbeda' : ''}
+                  </small>
+                )}
+                {hasPrice && q > 0 && selected && (
+                  <small className="muted">
+                    {priceMode === 'unit' ? `Total pembelian: ${rupiah(totalCost)}` : `≈ ${rupiah(unitCost)} per ${selected.unit}`}
+                  </small>
+                )}
+              </label>
+            </>
           )}
 
           <label>Catatan (opsional)

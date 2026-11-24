@@ -25,7 +25,8 @@ export default function Entry() {
   const [type, setType] = useState<EntryType>('out')
   const [ingId, setIngId] = useState('')
   const [qty, setQty] = useState('')
-  const [price, setPrice] = useState('')      // total harga beli (untuk "Masuk")
+  const [price, setPrice] = useState('')      // harga beli (untuk "Masuk"): per satuan atau total nota
+  const [priceMode, setPriceMode] = useState<'unit' | 'total'>('unit')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -57,12 +58,32 @@ export default function Entry() {
   const selected = ings.find((i) => i.id === ingId)
   const nameOf = (id: string) => ings.find((i) => i.id === id)
   const q = toNum(qty)
-  const total = toNum(price)
+  const p = toNum(price)
+  const hasPrice = price.trim() !== '' && p >= 0
+  const unitCost = !hasPrice ? 0 : priceMode === 'unit' ? p : q > 0 ? p / q : 0
+  const totalCost = !hasPrice ? 0 : priceMode === 'unit' ? p * q : p
+
+  // Isi otomatis dengan harga beli terakhir bila ada (khusus Admin; Karyawan tidak melihat harga)
+  const prefill = (ing: Ingredient | undefined) => {
+    if (ing && ing.last_cost > 0) { setPriceMode('unit'); setPrice(String(ing.last_cost)) }
+    else { setPriceMode('total'); setPrice('') }
+  }
+  const changeIngredient = (id: string) => { setIngId(id); prefill(ings.find((i) => i.id === id)) }
+  const changeType = (t: EntryType) => {
+    setType(t); setMsg(null)
+    if (t === 'in' && price === '') prefill(selected)
+  }
+  // Pindah mode harga sambil mengonversi angka yang sudah terisi
+  const changeMode = (m: 'unit' | 'total') => {
+    if (m === priceMode) return
+    if (price.trim() !== '' && q > 0) setPrice(String(m === 'total' ? Math.round(p * q * 100) / 100 : Math.round((p / q) * 100) / 100))
+    setPriceMode(m)
+  }
 
   const submit = async () => {
     if (!selected) return
     if (!(q > 0)) return setMsg({ ok: false, text: 'Jumlah harus lebih dari 0.' })
-    if (type === 'in' && (price === '' || !(total >= 0))) return setMsg({ ok: false, text: 'Isi total harga pembelian.' })
+    if (type === 'in' && !hasPrice) return setMsg({ ok: false, text: 'Isi harga pembelian.' })
 
     setBusy(true)
     const { data: u } = await supabase.auth.getUser()
@@ -70,14 +91,16 @@ export default function Entry() {
       ingredient_id: selected.id,
       type,
       quantity: q,
-      unit_cost: type === 'in' ? total / q : 0,
+      unit_cost: type === 'in' ? unitCost : 0,
       note: note.trim() || null,
       created_by: u.user?.id,
     })
     setBusy(false)
     if (error) return setMsg({ ok: false, text: error.message })
     setMsg({ ok: true, text: `Tersimpan: ${LABEL[type]} ${num(q)} ${selected.unit} ${selected.name}` })
-    setQty(''); setPrice(''); setNote('')
+    setQty(''); setNote('')
+    // pembelian berikutnya: harga yang baru disimpan langsung terisi lagi
+    if (type === 'in') { setPriceMode('unit'); setPrice(String(Math.round(unitCost * 100) / 100)) } else setPrice('')
     load()
   }
 
@@ -86,16 +109,26 @@ export default function Entry() {
       <PageTitle title="Entry Stok" subtitle="Catat bahan masuk, terpakai, atau rusak" />
 
       <Card>
-        <Segmented options={TYPES} value={type} onChange={(v) => { setType(v); setMsg(null) }} />
-        <Select label="Bahan" value={ingId} onChange={setIngId} options={options} placeholder="— Pilih bahan —" searchable />
+        <Segmented options={TYPES} value={type} onChange={changeType} />
+        <Select label="Bahan" value={ingId} onChange={changeIngredient} options={options} placeholder="— Pilih bahan —" searchable />
         <NumField label={`Jumlah${selected ? ` (${selected.unit})` : ''}`} value={qty} onChangeText={setQty} placeholder="0" />
 
         {type === 'in' ? (
-          <NumField label="Total harga pembelian (Rp)" value={price} onChangeText={setPrice} placeholder="0"
-            hint={[
-              q > 0 && price !== '' && total >= 0 && selected ? `≈ ${rupiah(total / q)} per ${selected.unit}` : '',
-              selected && selected.last_cost > 0 ? `Harga beli terakhir: ${rupiah(selected.last_cost)} per ${selected.unit}` : '',
-            ].filter(Boolean).join('\n') || undefined} />
+          <>
+            <Segmented<'unit' | 'total'> value={priceMode} onChange={changeMode}
+              options={[{ id: 'unit', label: 'Harga satuan' }, { id: 'total', label: 'Total nota' }]} />
+            <NumField
+              label={priceMode === 'unit' ? `Harga per ${selected?.unit ?? 'satuan'} (Rp)` : 'Total harga pembelian (Rp)'}
+              value={price} onChangeText={setPrice} placeholder="0"
+              hint={[
+                selected && selected.last_cost > 0
+                  ? `Harga beli terakhir: ${rupiah(selected.last_cost)} per ${selected.unit}${priceMode === 'unit' && p === selected.last_cost ? ' — terisi otomatis, ubah jika harganya berbeda' : ''}`
+                  : '',
+                hasPrice && q > 0 && selected
+                  ? (priceMode === 'unit' ? `Total pembelian: ${rupiah(totalCost)}` : `≈ ${rupiah(unitCost)} per ${selected.unit}`)
+                  : '',
+              ].filter(Boolean).join('\n') || undefined} />
+          </>
         ) : null}
 
         <Field label="Catatan (opsional)" value={note} onChangeText={setNote} placeholder="mis. nota supplier / shift pagi" />
