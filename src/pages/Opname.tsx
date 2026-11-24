@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { loadIngredients, startOfToday } from '../lib/data'
-import type { Category, Ingredient } from '../lib/types'
+import { isIncoming, type Category, type Ingredient, type MovementType } from '../lib/types'
 import { dateTime, num } from '../lib/analytics'
 
 interface Session {
@@ -25,14 +25,22 @@ export default function Opname({ isAdmin }: { isAdmin: boolean }) {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [history, setHistory] = useState<Session[]>([])
+  const [todayDelta, setTodayDelta] = useState<Map<string, number>>(new Map())
 
   const load = useCallback(async () => {
-    const [a, b, h, d] = await Promise.all([
+    const [a, b, h, d, mv] = await Promise.all([
       loadIngredients(false, true),
       supabase.from('categories').select('*').order('name'),
       supabase.rpc('opname_history', { p_limit: 15 }),
       supabase.rpc('opname_today', { p_since: startOfToday() }),
+      supabase.from('stock_movements').select('ingredient_id, type, quantity').gte('created_at', startOfToday()),
     ])
+    // Perubahan stok bersih hari ini per bahan (untuk menghitung stok kemarin = stok sekarang - perubahan hari ini)
+    const delta = new Map<string, number>()
+    for (const m of (mv.data ?? []) as { ingredient_id: string; type: MovementType; quantity: number }[]) {
+      delta.set(m.ingredient_id, (delta.get(m.ingredient_id) ?? 0) + (isIncoming(m.type) ? 1 : -1) * Number(m.quantity))
+    }
+    setTodayDelta(delta)
     setHistory((h.data ?? []) as Session[])
     setDone(new Map(((d.data ?? []) as Done[]).map((r) => [r.ingredient_id, r])))
     if (d.error) setMsg({ ok: false, text: `${d.error.message} (sudah menjalankan 009_daily_opname.sql?)` })
@@ -63,6 +71,17 @@ export default function Opname({ isAdmin }: { isAdmin: boolean }) {
     return physical >= 0 ? [{ ing: i, physical, diff: physical - Number(i.current_stock) }] : []
   }), [ings, counts])
   const mismatches = entries.filter((e) => Math.abs(e.diff) >= 1e-9).length
+
+  const round = (n: number) => Math.round(n * 1000) / 1000
+  const yesterday = (i: Ingredient) => round(Number(i.current_stock) - (todayDelta.get(i.id) ?? 0))
+
+  // Bahan di tampilan saat ini yang belum diisi -> dianggap sesuai stok sistem
+  const blanks = visible.filter((i) => (counts[i.id] ?? '').trim() === '')
+  const markRest = () => {
+    if (blanks.length === 0) return
+    if (!window.confirm(`${blanks.length} bahan yang belum diisi akan dianggap SESUAI stok sistem (tidak ada selisih).\nPastikan bahan yang berkurang sudah Anda isi. Lanjutkan?`)) return
+    setCounts((c) => ({ ...c, ...Object.fromEntries(blanks.map((i) => [i.id, String(round(Number(i.current_stock)))])) }))
+  }
 
   const save = async () => {
     if (entries.length === 0) return
@@ -119,9 +138,15 @@ export default function Opname({ isAdmin }: { isAdmin: boolean }) {
         <label>Catatan opname (opsional)
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="mis. opname penutupan" />
         </label>
+        <div className="actions">
+          <button className="btn-ghost" disabled={blanks.length === 0} onClick={markRest}>
+            Tandai sisanya sesuai ({blanks.length})
+          </button>
+        </div>
+        <p className="muted small">Isi stok fisik bahan yang <strong>berkurang</strong> saja. Lalu tekan <em>Tandai sisanya sesuai</em> untuk bahan yang tidak berubah dari kemarin.</p>
         <div className="table-wrap">
-          <table>
-            <thead><tr><th>Bahan</th><th className="r">Stok sistem</th><th className="r">Stok fisik</th><th className="r">Selisih</th></tr></thead>
+          <table className="rtable">
+            <thead><tr><th>Bahan</th><th className="r">Stok kemarin</th><th className="r">Stok sistem</th><th className="r">Stok fisik</th><th className="r">Selisih</th></tr></thead>
             <tbody>
               {visible.map((i) => {
                 const raw = counts[i.id] ?? ''
@@ -129,17 +154,18 @@ export default function Opname({ isAdmin }: { isAdmin: boolean }) {
                 const d = done.get(i.id)
                 return (
                   <tr key={i.id}>
-                    <td>
+                    <td className="cell-title">
                       <strong>{i.name}</strong><br />
                       <span className="muted small">{i.unit}</span>
                       {d && <span className="small pos"> · ✓ {hhmm(d.performed_at)} oleh {d.user_name}</span>}
                     </td>
-                    <td className="r">{num(i.current_stock)}</td>
-                    <td className="r">
+                    <td className="r" data-label="Stok kemarin">{num(yesterday(i))}</td>
+                    <td className="r" data-label="Stok sistem">{num(i.current_stock)}</td>
+                    <td className="r" data-label="Stok fisik">
                       <input className="min-input" type="text" inputMode="decimal" value={raw}
                         onChange={(e) => setCounts({ ...counts, [i.id]: e.target.value })} placeholder={d ? 'Ulang' : '—'} aria-label={`Stok fisik ${i.name}`} />
                     </td>
-                    <td className="r">
+                    <td className="r" data-label="Selisih">
                       {diff === null ? <span className="muted">—</span>
                         : Math.abs(diff) < 1e-9 ? <span className="pill ok">Sesuai</span>
                         : <strong className={diff > 0 ? 'pos' : 'neg'}>{diff > 0 ? '+' : ''}{num(diff)}</strong>}
@@ -147,7 +173,7 @@ export default function Opname({ isAdmin }: { isAdmin: boolean }) {
                   </tr>
                 )
               })}
-              {visible.length === 0 && <tr><td colSpan={4} className="empty">{tab === 'pending' ? '🎉 Tidak ada bahan yang tersisa di sini.' : 'Tidak ada bahan.'}</td></tr>}
+              {visible.length === 0 && <tr><td colSpan={5} className="empty">{tab === 'pending' ? '🎉 Tidak ada bahan yang tersisa di sini.' : 'Tidak ada bahan.'}</td></tr>}
             </tbody>
           </table>
         </div>

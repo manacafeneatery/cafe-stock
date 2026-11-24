@@ -4,7 +4,7 @@ import { useFocusEffect } from 'expo-router'
 import { supabase } from '@/lib/supabase'
 import { loadIngredients, startOfToday } from '@/lib/data'
 import { useTheme } from '@/lib/theme'
-import type { Category, Ingredient } from '@/lib/types'
+import { isIncoming, type Category, type Ingredient, type MovementType } from '@/lib/types'
 import { dateTime, num, toNum, uuid } from '@/lib/analytics'
 import {
   Bar, Button, Card, CardHead, Chips, Empty, Field, List, Notice, PageTitle, Pill, Row, Screen, Segmented, Txt, useDialog,
@@ -34,15 +34,23 @@ export default function Opname() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [history, setHistory] = useState<Session[]>([])
   const [openKey, setOpenKey] = useState<string | null>(null)
+  const [todayDelta, setTodayDelta] = useState<Map<string, number>>(new Map())
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [a, b, h, d] = await Promise.all([
+    const [a, b, h, d, mv] = await Promise.all([
       loadIngredients(false, true),
       supabase.from('categories').select('*').order('name'),
       supabase.rpc('opname_history', { p_limit: 15 }),
       supabase.rpc('opname_today', { p_since: startOfToday() }),
+      supabase.from('stock_movements').select('ingredient_id, type, quantity').gte('created_at', startOfToday()),
     ])
+    // Perubahan stok bersih hari ini per bahan (stok kemarin = stok sekarang - perubahan hari ini)
+    const delta = new Map<string, number>()
+    for (const m of (mv.data ?? []) as { ingredient_id: string; type: MovementType; quantity: number }[]) {
+      delta.set(m.ingredient_id, (delta.get(m.ingredient_id) ?? 0) + (isIncoming(m.type) ? 1 : -1) * Number(m.quantity))
+    }
+    setTodayDelta(delta)
     const hist = (h.data ?? []) as Session[]
     setHistory(hist)
     setOpenKey((k) => k ?? hist[0]?.session_key ?? null)
@@ -79,6 +87,22 @@ export default function Opname() {
     return physical >= 0 ? [{ ing: i, physical, diff: physical - Number(i.current_stock) }] : []
   }), [ings, counts])
   const mismatches = entries.filter((e) => Math.abs(e.diff) >= 1e-9).length
+
+  const round = (n: number) => Math.round(n * 1000) / 1000
+  const yesterday = (i: Ingredient) => round(Number(i.current_stock) - (todayDelta.get(i.id) ?? 0))
+
+  // Bahan di tampilan saat ini yang belum diisi -> dianggap sesuai stok sistem
+  const blanks = visible.filter((i) => (counts[i.id] ?? '').trim() === '')
+  const markRest = async () => {
+    if (blanks.length === 0) return
+    const ok = await confirm(
+      `Tandai ${blanks.length} bahan sebagai sesuai?`,
+      'Bahan yang belum diisi dianggap SESUAI stok sistem (tidak ada selisih). Pastikan bahan yang berkurang sudah Anda isi.',
+      'Tandai sesuai',
+    )
+    if (!ok) return
+    setCounts((c) => ({ ...c, ...Object.fromEntries(blanks.map((i) => [i.id, String(round(Number(i.current_stock)))])) }))
+  }
 
   const save = async () => {
     if (entries.length === 0) return
@@ -141,7 +165,10 @@ export default function Opname() {
                 <View key={i.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 }}>
                   <View style={{ flex: 1, gap: 2 }}>
                     <Txt bold>{i.name}</Txt>
-                    <Txt muted small>Sistem: {num(i.current_stock)} {i.unit}</Txt>
+                    <Txt muted small>
+                      Kemarin: {num(yesterday(i))} {i.unit}
+                      {Math.abs(yesterday(i) - Number(i.current_stock)) > 1e-9 ? ` · Sistem: ${num(i.current_stock)}` : ''}
+                    </Txt>
                     {d ? <Txt small color={t.brand}>✓ {hhmm(d.performed_at)} · {d.user_name}</Txt> : null}
                   </View>
                   <View style={{ width: 64, alignItems: 'flex-end' }}>
@@ -162,6 +189,8 @@ export default function Opname() {
         )}
 
         <Field label="Catatan opname (opsional)" value={note} onChangeText={setNote} placeholder="mis. opname penutupan" />
+        <Txt muted small>Isi stok fisik bahan yang <Txt small bold>berkurang</Txt> saja. Lalu tekan "Tandai sisanya sesuai" untuk bahan yang tidak berubah dari kemarin.</Txt>
+        <Button title={`Tandai sisanya sesuai (${blanks.length})`} variant="ghost" onPress={markRest} disabled={blanks.length === 0} />
         <Button title={`Simpan opname${entries.length ? ` (${entries.length})` : ''}`} onPress={save} loading={busy} disabled={entries.length === 0} />
         <Txt muted small>Isi stok fisik bahan yang dihitung. Bahan yang sesuai pun ikut dicatat sebagai sudah di-opname.</Txt>
       </Card>
