@@ -39,6 +39,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="more" options={{ title: 'Lainnya', tabBarIcon: icon('menu') }} />
 
       {/* Halaman Admin: tidak muncul di tab bar */}
+      <Tabs.Screen name="shopping" options={{ href: null, title: 'Daftar Belanja', headerLeft: back }} />
       <Tabs.Screen name="import" options={{ href: null, title: 'Impor Kasir', headerLeft: back }} />
       <Tabs.Screen name="menus" options={{ href: null, title: 'Menu & Resep', headerLeft: back }} />
       <Tabs.Screen name="ingredients" options={{ href: null, title: 'Bahan & HPP', headerLeft: back }} />

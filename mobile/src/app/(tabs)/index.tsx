@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { supabase } from '@/lib/supabase'
@@ -49,8 +49,8 @@ function ItemRow({ s, kind, cat }: { s: IngredientStat; kind: Kind; cat?: string
   )
 }
 
-function Section({ title, hint, dot, items, kind, catName }: {
-  title: string; hint: string; dot: 'red' | 'green' | 'gray'; items: IngredientStat[]; kind: Kind; catName: Map<string, string>
+function Section({ title, hint, dot, items, kind, catName, footer }: {
+  title: string; hint: string; dot: 'red' | 'green' | 'gray'; items: IngredientStat[]; kind: Kind; catName: Map<string, string>; footer?: ReactNode
 }) {
   return (
     <Card>
@@ -59,6 +59,7 @@ function Section({ title, hint, dot, items, kind, catName }: {
       {items.length === 0 ? <Empty text="Tidak ada bahan di kategori ini." /> : (
         <List>{items.map((s) => <ItemRow key={s.id} s={s} kind={kind} cat={s.category_id ? catName.get(s.category_id) : undefined} />)}</List>
       )}
+      {items.length > 0 ? footer : null}
     </Card>
   )
 }
@@ -142,7 +143,8 @@ export default function Dashboard() {
         {isAdmin ? <Stat label="Nilai stok" value={rupiah(totalValue)} /> : <Stat label="Jarang keluar" value={String(slow.length)} />}
       </StatGrid>
 
-      <Section title="Akan habis" dot="red" kind="low" items={low} catName={catName} hint="Stok ≤ batas minimum atau cukup ≤ 3 hari pemakaian." />
+      <Section title="Akan habis" dot="red" kind="low" items={low} catName={catName} hint="Stok ≤ batas minimum atau cukup ≤ 3 hari pemakaian."
+        footer={<Button title="🛒 Buat daftar belanja" onPress={() => router.navigate('/shopping')} />} />
       <Section title="Fast moving" dot="green" kind="fast" items={fast} catName={catName} hint="Bahan yang cepat terpakai — jaga selalu tersedia." />
       <Section title="Jarang keluar" dot="gray" kind="slow" items={slow} catName={catName} hint="Pemakaian rendah — hindari membeli berlebihan." />
     </Screen>

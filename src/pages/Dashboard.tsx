@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { loadIngredients, MOVE_COLS, startOfToday } from '../lib/data'
 import type { Category, Ingredient, Movement } from '../lib/types'
@@ -34,8 +34,8 @@ function Row({ s, kind, cat }: { s: IngredientStat; kind: 'fast' | 'low' | 'slow
   )
 }
 
-function Section({ title, hint, tone, items, kind, catName }: {
-  title: string; hint: string; tone: string; items: IngredientStat[]; kind: 'fast' | 'low' | 'slow'; catName: Map<string, string>
+function Section({ title, hint, tone, items, kind, catName, footer }: {
+  title: string; hint: string; tone: string; items: IngredientStat[]; kind: 'fast' | 'low' | 'slow'; catName: Map<string, string>; footer?: ReactNode
 }) {
   return (
     <section className="card">
@@ -45,11 +45,12 @@ function Section({ title, hint, tone, items, kind, catName }: {
       </header>
       <p className="muted small">{hint}</p>
       {items.length === 0 ? <p className="empty">Tidak ada bahan di kategori ini.</p> : <ul className="list">{items.map((s) => <Row key={s.id} s={s} kind={kind} cat={s.category_id ? catName.get(s.category_id) : undefined} />)}</ul>}
+      {items.length > 0 && footer}
     </section>
   )
 }
 
-export default function Dashboard({ isAdmin, onOpname }: { isAdmin: boolean; onOpname: () => void }) {
+export default function Dashboard({ isAdmin, onOpname, onShop }: { isAdmin: boolean; onOpname: () => void; onShop: () => void }) {
   const [opname, setOpname] = useState<{ done: number; total: number } | null>(null)
   const [ings, setIngs] = useState<Ingredient[]>([])
   const [moves, setMoves] = useState<Movement[]>([])
@@ -136,6 +137,7 @@ export default function Dashboard({ isAdmin, onOpname }: { isAdmin: boolean; onO
 
           <div className="grid">
             <Section title="Akan habis" tone="red" kind="low" items={low} catName={catName}
+              footer={<button className="btn" onClick={onShop}>🛒 Buat daftar belanja</button>}
               hint={`Stok ≤ batas minimum atau cukup ≤ ${3} hari pemakaian.`} />
             <Section title="Fast moving" tone="green" kind="fast" items={fast} catName={catName}
               hint="Bahan yang cepat terpakai — jaga selalu tersedia." />

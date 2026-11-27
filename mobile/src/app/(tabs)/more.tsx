@@ -13,6 +13,7 @@ export default function More() {
   const { confirm } = useDialog()
 
   const all = [
+    { path: '/shopping', icon: 'cart-outline', title: 'Daftar Belanja', sub: 'Bahan yang perlu dibeli, bagikan ke WhatsApp', admin: false },
     { path: '/import', icon: 'download-outline', title: 'Impor Kasir', sub: 'Potong stok dari laporan penjualan Ideku', admin: false },
     { path: '/menus', icon: 'restaurant-outline', title: 'Menu & Resep', sub: 'HPP per porsi, margin, resep', admin: true },
     { path: '/ingredients', icon: 'cube-outline', title: 'Bahan & HPP', sub: 'Kategori, stok minimum, harga', admin: true },

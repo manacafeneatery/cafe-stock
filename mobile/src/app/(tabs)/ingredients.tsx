@@ -45,6 +45,8 @@ export default function Ingredients() {
   const [costFor, setCostFor] = useState<Ingredient | null>(null)
   const [costForm, setCostForm] = useState({ avg: '', last: '', note: '' })
   const [adjs, setAdjs] = useState<Adjustment[]>([])
+  const [mergeFrom, setMergeFrom] = useState<Ingredient | null>(null)
+  const [mergeTo, setMergeTo] = useState('')
   const [loading, setLoading] = useState(false)
 
   const load = useCallback(async () => {
@@ -70,6 +72,9 @@ export default function Ingredients() {
     (filter === 'all' || (filter === 'none' ? !i.category_id : i.category_id === filter))), [ings, q, filter])
   const totalValue = ings.filter((i) => i.is_active).reduce((s, i) => s + i.current_stock * i.avg_cost, 0)
   const countBy = (id: string) => ings.filter((i) => (id === 'none' ? !i.category_id : i.category_id === id)).length
+  // Tujuan gabung: bahan lain dengan satuan yang sama
+  const sameUnit = (a: Ingredient, b: Ingredient) => a.unit.trim().toLowerCase() === b.unit.trim().toLowerCase()
+  const mergeTargets = mergeFrom ? ings.filter((i) => i.id !== mergeFrom.id && sameUnit(i, mergeFrom)) : []
 
   /* ---------- Bahan ---------- */
   const startEdit = (i: Ingredient) => {
@@ -96,6 +101,47 @@ export default function Ingredients() {
   const toggle = async (i: Ingredient) => {
     await supabase.from('ingredients').update({ is_active: !i.is_active }).eq('id', i.id)
     load()
+  }
+
+  // Gabungkan bahan dobel: stok, riwayat, resep, dan harga pindah ke bahan tujuan
+  const merge = async () => {
+    const target = mergeTargets.find((i) => i.id === mergeTo)
+    if (!mergeFrom || !target) return
+    if (!(await confirm('Gabungkan bahan?', `"${mergeFrom.name}" akan dihapus. Stok, riwayat, dan resepnya pindah ke "${target.name}". Tidak bisa dibatalkan.`, 'Gabungkan'))) return
+    const { error } = await supabase.rpc('merge_ingredients', { p_source: mergeFrom.id, p_target: target.id })
+    if (error) return setMsg({ ok: false, text: `${error.message} (sudah menjalankan 011_merge_ingredients.sql?)` })
+    if (editing?.id === mergeFrom.id || editing?.id === target.id) reset()
+    if (costFor?.id === mergeFrom.id || costFor?.id === target.id) setCostFor(null)
+    setMsg({ ok: true, text: `"${mergeFrom.name}" digabungkan ke "${target.name}".` })
+    setMergeFrom(null); load()
+  }
+
+  // Hapus permanen (mis. bahan dobel). Riwayat stok bahan ini ikut terhapus di database.
+  const remove = async (i: Ingredient) => {
+    const fail = (text: string) => { setMsg({ ok: false, text }); toTop() }
+    const [used, moves] = await Promise.all([
+      supabase.from('recipe_items').select('menus(name)').eq('ingredient_id', i.id),
+      supabase.from('stock_movements').select('id', { count: 'exact', head: true }).eq('ingredient_id', i.id),
+    ])
+    if (used.error || moves.error) return fail((used.error ?? moves.error)!.message || 'Gagal memeriksa bahan.')
+    if (used.data.length) {
+      const names = (used.data as unknown as { menus: { name: string } | null }[]).map((r) => r.menus?.name ?? '—').join(', ')
+      return fail(`"${i.name}" tidak bisa dihapus karena dipakai di resep: ${names}. Pakai Gabungkan, atau ganti bahan di resep tersebut dulu.`)
+    }
+    const warn = [
+      `"${i.name}"`,
+      `Stok saat ini: ${num(i.current_stock)} ${i.unit}`,
+      `Riwayat transaksi stok: ${moves.count ?? 0}`,
+      'Riwayat stok, opname, dan harga bahan ini ikut terhapus dan tidak bisa dikembalikan.',
+    ].join('\n')
+    if (!(await confirm('Hapus bahan permanen?', warn, 'Hapus'))) return
+    const { data, error } = await supabase.from('ingredients').delete().eq('id', i.id).select('id')
+    if (error) return fail(error.message)
+    if (!data.length) return fail('Bahan tidak terhapus. Hanya Admin yang boleh menghapus.')
+    if (editing?.id === i.id) reset()
+    if (costFor?.id === i.id) setCostFor(null)
+    if (mergeFrom?.id === i.id) setMergeFrom(null)
+    setMsg({ ok: true, text: `Bahan "${i.name}" dihapus.` }); load()
   }
 
   const saveMin = async (i: Ingredient, value: string) => {
@@ -208,6 +254,20 @@ export default function Ingredients() {
         </Card>
       ) : null}
 
+      {/* Gabungkan bahan dobel */}
+      {mergeFrom ? (
+        <Card style={{ borderLeftWidth: 5, borderLeftColor: t.brick }}>
+          <CardHead title={`Gabungkan: ${mergeFrom.name}`} />
+          <Txt muted small>Bahan ini akan dihapus. Stok, riwayat, dan resepnya pindah ke bahan tujuan; HPP dirata-rata menurut stok. Hanya bahan bersatuan {mergeFrom.unit} yang bisa dipilih.</Txt>
+          <Select label="Gabungkan ke" value={mergeTo} onChange={setMergeTo} searchable placeholder="Pilih bahan yang dipertahankan"
+            options={mergeTargets.map((i) => ({ value: i.id, label: `${i.name} · stok ${num(i.current_stock)} ${i.unit}` }))} />
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Button title="Gabungkan" onPress={merge} disabled={!mergeTo} />
+            <Button title="Batal" variant="ghost" onPress={() => setMergeFrom(null)} />
+          </View>
+        </Card>
+      ) : null}
+
       {/* Kelola kategori */}
       <Card>
         <CardHead title="Kategori bahan" right={<Button title={showCats ? 'Tutup' : 'Kelola'} variant="ghost" small onPress={() => setShowCats(!showCats)} />} />
@@ -267,6 +327,8 @@ export default function Ingredients() {
               <Button title="Ubah" variant="ghost" small onPress={() => startEdit(i)} />
               <Button title="Atur harga" variant="ghost" small onPress={() => openCost(i)} />
               <Button title={i.is_active ? 'Nonaktifkan' : 'Aktifkan'} variant="ghost" small onPress={() => toggle(i)} />
+              <Button title="Gabungkan" variant="ghost" small onPress={() => { setMergeFrom(i); setMergeTo(''); toTop() }} />
+              <Button title="Hapus" variant="danger" small onPress={() => remove(i)} />
             </View>
           </Card>
         )
