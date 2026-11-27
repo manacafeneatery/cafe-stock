@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
-import { View } from 'react-native'
+import { Share, View } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { supabase } from '@/lib/supabase'
 import { MOVE_COLS, loadIngredients, startOfToday } from '@/lib/data'
@@ -9,6 +9,7 @@ import type { Category, Ingredient, Movement } from '@/lib/types'
 import {
   computeStats, LEVEL_LABEL, num, restockQty, rupiah, stockLevel, WINDOW_DAYS, type IngredientStat,
 } from '@/lib/analytics'
+import { lowStockText } from '@/lib/shopping'
 import { Bar, Button, Card, CardHead, Chips, Empty, List, Notice, PageTitle, Pill, Row, Screen, Stat, StatGrid, Txt } from '@/components/ui'
 
 type Kind = 'fast' | 'low' | 'slow'
@@ -56,10 +57,10 @@ function Section({ title, hint, dot, items, kind, catName, footer }: {
     <Card>
       <CardHead title={title} dot={dot} right={<Pill tone="gray" text={String(items.length)} />} />
       <Txt muted small>{hint}</Txt>
+      {items.length > 0 ? footer : null}
       {items.length === 0 ? <Empty text="Tidak ada bahan di kategori ini." /> : (
         <List>{items.map((s) => <ItemRow key={s.id} s={s} kind={kind} cat={s.category_id ? catName.get(s.category_id) : undefined} />)}</List>
       )}
-      {items.length > 0 ? footer : null}
     </Card>
   )
 }
@@ -110,6 +111,12 @@ export default function Dashboard() {
   const slow = stats.filter((s) => s.isSlow).sort((a, b) => a.usage - b.usage)
   const totalValue = stats.reduce((t, s) => t + s.stockValue, 0)
 
+  // Lembar bagikan bawaan HP: pilih WhatsApp atau Salin
+  const shareLow = async () => {
+    const message = lowStockText(low.map((s) => ({ name: s.name, unit: s.unit, stock: s.current_stock, min: s.min_stock, daysLeft: s.daysLeft })))
+    try { await Share.share({ message }) } catch { /* dibatalkan pengguna */ }
+  }
+
   return (
     <Screen onRefresh={load} refreshing={loading}>
       <PageTitle title="Ringkasan Stok" subtitle={`Analisis pemakaian ${WINDOW_DAYS} hari terakhir`} />
@@ -144,7 +151,12 @@ export default function Dashboard() {
       </StatGrid>
 
       <Section title="Akan habis" dot="red" kind="low" items={low} catName={catName} hint="Stok ≤ batas minimum atau cukup ≤ 3 hari pemakaian."
-        footer={<Button title="🛒 Buat daftar belanja" onPress={() => router.navigate('/shopping')} />} />
+        footer={
+          <View style={{ gap: 8 }}>
+            <Button title="📋 Salin / kirim teks" onPress={shareLow} />
+            <Button title="🛒 Buat daftar belanja" variant="ghost" onPress={() => router.navigate('/shopping')} />
+          </View>
+        } />
       <Section title="Fast moving" dot="green" kind="fast" items={fast} catName={catName} hint="Bahan yang cepat terpakai — jaga selalu tersedia." />
       <Section title="Jarang keluar" dot="gray" kind="slow" items={slow} catName={catName} hint="Pemakaian rendah — hindari membeli berlebihan." />
     </Screen>

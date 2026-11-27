@@ -28,3 +28,23 @@ export function shoppingText(items: ShopItem[], date = new Date()): string {
   lines.push('', `Total ${items.length} item`)
   return lines.join('\n')
 }
+
+export interface LowItem { name: string; unit: string; stock: number; min: number; daysLeft: number | null }
+
+// Ringkasan bahan yang habis / akan habis (urutan mengikuti daftar yang diberikan)
+export function lowStockText(items: LowItem[], date = new Date()): string {
+  const line = (i: LowItem) => {
+    const days = i.stock > 0 && i.daysLeft !== null ? ` · cukup ± ${num(Math.floor(i.daysLeft))} hari` : ''
+    return `• ${i.name} — sisa ${num(i.stock)} ${i.unit} (min ${num(i.min)})${days}`
+  }
+  const lines = [
+    `⚠️ *Stok akan habis ${STORE_NAME}*`,
+    `${DAYS[date.getDay()]}, ${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`,
+  ]
+  const groups: [string, LowItem[]][] = [['Habis', items.filter((i) => i.stock <= 0)], ['Akan habis', items.filter((i) => i.stock > 0)]]
+  for (const [title, list] of groups) {
+    if (list.length) lines.push('', `*${title} (${list.length})*`, ...list.map(line))
+  }
+  lines.push('', `Total ${items.length} bahan`)
+  return lines.join('\n')
+}

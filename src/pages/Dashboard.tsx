@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { loadIngredients, MOVE_COLS, startOfToday } from '../lib/data'
 import type { Category, Ingredient, Movement } from '../lib/types'
 import { computeStats, LEVEL_LABEL, num, restockQty, rupiah, stockLevel, WINDOW_DAYS, type IngredientStat } from '../lib/analytics'
+import { lowStockText } from '../lib/shopping'
 
 function Row({ s, kind, cat }: { s: IngredientStat; kind: 'fast' | 'low' | 'slow'; cat?: string }) {
   const pct = Math.min(100, s.min_stock > 0 ? (s.current_stock / (s.min_stock * 2)) * 100 : 100)
@@ -44,8 +45,8 @@ function Section({ title, hint, tone, items, kind, catName, footer }: {
         <span className="badge">{items.length}</span>
       </header>
       <p className="muted small">{hint}</p>
-      {items.length === 0 ? <p className="empty">Tidak ada bahan di kategori ini.</p> : <ul className="list">{items.map((s) => <Row key={s.id} s={s} kind={kind} cat={s.category_id ? catName.get(s.category_id) : undefined} />)}</ul>}
       {items.length > 0 && footer}
+      {items.length === 0 ? <p className="empty">Tidak ada bahan di kategori ini.</p> : <ul className="list">{items.map((s) => <Row key={s.id} s={s} kind={kind} cat={s.category_id ? catName.get(s.category_id) : undefined} />)}</ul>}
     </section>
   )
 }
@@ -58,6 +59,7 @@ export default function Dashboard({ isAdmin, onOpname, onShop }: { isAdmin: bool
   const [filter, setFilter] = useState('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [copied, setCopied] = useState<{ ok: boolean; text: string } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -92,6 +94,13 @@ export default function Dashboard({ isAdmin, onOpname, onShop }: { isAdmin: bool
   const low = stats.filter((s) => s.isLow).sort((a, b) => (a.daysLeft ?? 999) - (b.daysLeft ?? 999))
   const slow = stats.filter((s) => s.isSlow).sort((a, b) => a.usage - b.usage)
   const totalValue = stats.reduce((t, s) => t + s.stockValue, 0)
+
+  // Salin ringkasan; bila peramban menolak, teks ditampilkan agar bisa disalin manual
+  const copyLow = async () => {
+    const text = lowStockText(low.map((s) => ({ name: s.name, unit: s.unit, stock: s.current_stock, min: s.min_stock, daysLeft: s.daysLeft })))
+    try { await navigator.clipboard.writeText(text); setCopied({ ok: true, text: 'Teks disalin. Tempel di WhatsApp.' }) }
+    catch { setCopied({ ok: false, text }) }
+  }
 
   return (
     <>
@@ -137,7 +146,16 @@ export default function Dashboard({ isAdmin, onOpname, onShop }: { isAdmin: bool
 
           <div className="grid">
             <Section title="Akan habis" tone="red" kind="low" items={low} catName={catName}
-              footer={<button className="btn" onClick={onShop}>🛒 Buat daftar belanja</button>}
+              footer={
+                <>
+                  <div className="actions">
+                    <button className="btn" onClick={copyLow}>📋 Salin teks</button>
+                    <button className="btn-ghost" onClick={onShop}>🛒 Buat daftar belanja</button>
+                  </div>
+                  {copied?.ok && <div className="alert ok">{copied.text}</div>}
+                  {copied && !copied.ok && <textarea readOnly rows={10} value={copied.text} onFocus={(e) => e.target.select()} aria-label="Ringkasan stok akan habis" />}
+                </>
+              }
               hint={`Stok ≤ batas minimum atau cukup ≤ ${3} hari pemakaian.`} />
             <Section title="Fast moving" tone="green" kind="fast" items={fast} catName={catName}
               hint="Bahan yang cepat terpakai — jaga selalu tersedia." />
